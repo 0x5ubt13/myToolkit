@@ -20,7 +20,7 @@ while true ; do
     AGGRESIVE=${AGGR,,}
 
     if [ "$AGGRESIVE" == "yes" ] || [ "$AGGRESIVE" == "y" ]; then
-        AGGRESIVE_FLAG="-vv"
+        AGGRESIVE_FLAG="-A"
         break;
     elif [ "$AGGRESIVE" == "no" ] || [ "$AGGRESIVE" == "n" ]; then
         AGGRESIVE_FLAG="-sS"
@@ -31,7 +31,7 @@ while true ; do
 done
 
 while true ; do
-    read -rp "Do you want this scan verbose? (yes/no)" VERB
+    read -rp "Do you want this scan verbose? (yes/no): " VERB
     VERBOSE=${VERB,,}
 
     if [ "$VERBOSE" == "yes" ] || [ "$VERBOSE" == "y" ]; then
