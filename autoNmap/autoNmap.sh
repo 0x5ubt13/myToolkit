@@ -41,7 +41,7 @@ while true ; do
         COMP_NAME.="_verbose"
         break;
     elif [ "$VERBOSE" == "no" ] || [ "$VERBOSE" == "n" ]; then
-        VERBOSE_FLAG=""
+        VERBOSE_FLAG=
         break;
     else
         printf 'Sorry, you need to enter either "yes" or "no"\n'
