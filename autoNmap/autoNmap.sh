@@ -49,5 +49,5 @@ while true ; do
 done
 
 echo -n "[+] Procceeding to scan the open ports with your settings..."
-nmap "$AGGRESIVE_FLAG" "$VERBOSE_FLAG" -oN "${NAME}_${COMP_NAME}.scan" -p"$PORTS" "$IP"
+nmap "$AGGRESIVE_FLAG" "$VERBOSE_FLAG" -oN "${NAME}${COMP_NAME}.scan" -p"$PORTS" "$IP" 2>/dev/null
 
