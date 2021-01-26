@@ -10,7 +10,7 @@ read -r NAME
 echo "[+] Scanning for open ports..."
 PORTS=$(nmap -p- --min-rate=1000 -T4 "$IP" | grep "^[0-9]" | cut -d '/' -f 1 | tr '\n' ',' | sed "s/,$//")
 
-printf "[!] Done! Here is a summary of the ports you will be messing with this time:\n"
+printf "[+] Done! Here is a summary of the ports you will be messing with this time:\n"
 
 for PORT in $(echo "$PORTS" | tr ',' '\n')
 do 
@@ -18,7 +18,7 @@ do
 done
 
 while true ; do
-    echo "Do you want this scan aggresive (flag -A)? (yes/no):"
+    echo "[?] Do you want this scan aggresive (flag -A)? (yes/no):"
     read -r AGGR
     AGGRESIVE=$(echo "$AGGR" | awk '{print tolower($0)}')
 
@@ -31,7 +31,7 @@ while true ; do
         COMP_NAME="_stealthy"
         break;
     else
-        printf 'Sorry, you need to enter either "yes" or "no"\n'
+        printf '[!] Sorry, you need to enter either "yes" or "no"\n'
     fi
 done
 
@@ -54,4 +54,6 @@ done
 
 printf "\n[+] Procceeding to scan the open ports with your settings..."
 nmap "$AGGRESIVE_FLAG" "$VERBOSE_FLAG" -oN "${NAME}${COMP_NAME}.scan" -p"$PORTS" "$IP" 2>/dev/null
+
+printf "\n[+] Done! you file has been saved as %s%s.scan" "$NAME" "$COMP_NAME"
 
