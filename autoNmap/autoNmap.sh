@@ -52,8 +52,9 @@ while true ; do
     fi
 done
 
+FINAL_NAME="${NAME}${COMP_NAME}.scan"
+
 printf "\n[+] Procceeding to scan the open ports with your settings..."
-nmap "$AGGRESIVE_FLAG" "$VERBOSE_FLAG" -oN "${NAME}${COMP_NAME}.scan" -p"$PORTS" "$IP" 2>/dev/null
+nmap "$AGGRESIVE_FLAG" "$VERBOSE_FLAG" -oN "${FINAL_NAME}.scan" -p"$PORTS" "$IP" 2>/dev/null
 
-printf "\n[+] Done! you file has been saved as %s%s.scan" "$NAME" "$COMP_NAME"
-
+printf "\n[+] Done! you file has been saved as %s.scan" "$FINAL_NAME"
