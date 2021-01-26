@@ -8,7 +8,7 @@ Well, not anymore! With this tool you can automate the process and actually save
 
 ## Requisites
 
-- Bash >= 4.0
+- It's now POSIX compliant so just a shell.
 
 ## Installation
 
