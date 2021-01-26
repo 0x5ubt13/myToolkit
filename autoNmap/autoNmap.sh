@@ -2,8 +2,10 @@
 
 echo "Welcome to autoNmap for quickly scanning your box, by 0x5ubt13!"
 
-read -r "IP to attack: " IP
-read -r "Name of the box to name the file: " NAME
+echo "Enter IP to attack:"
+read -r IP
+echo "Enter name of the box to name the file:"
+read -r NAME
 
 echo "[+] Scanning for open ports..."
 PORTS=$(nmap -p- --min-rate=1000 -T4 "$IP" | grep "^[0-9]" | cut -d '/' -f 1 | tr '\n' ',' | sed "s/,$//")
@@ -16,7 +18,8 @@ do
 done
 
 while true ; do
-    read -r "Do you want this scan aggresive (flag -A)? (yes/no): " AGGR
+    echo "Do you want this scan aggresive (flag -A)? (yes/no):"
+    read -r AGGR
     AGGRESIVE=$(echo "$AGGR" | awk '{print tolower($0)}')
 
     if [ "$AGGRESIVE" = "yes" ] || [ "$AGGRESIVE" = "y" ]; then
@@ -33,7 +36,8 @@ while true ; do
 done
 
 while true ; do
-    read -r "Do you want this scan verbose? (yes/no): " VERB
+    echo "Do you want this scan verbose? (yes/no):"
+    read -r VERB
     VERBOSE=$(echo "$VERB" | awk '{print tolower($0)}')
 
     if [ "$VERBOSE" = "yes" ] || [ "$VERBOSE" = "y" ]; then
