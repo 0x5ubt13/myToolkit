@@ -1,4 +1,4 @@
-#!/bin/dash
+#!/bin/sh
 
 echo "Welcome to autoNmap for quickly scanning your box, by 0x5ubt13!"
 
