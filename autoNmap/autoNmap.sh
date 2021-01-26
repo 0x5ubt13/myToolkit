@@ -42,7 +42,7 @@ while true ; do
 
     if [ "$VERBOSE" = "yes" ] || [ "$VERBOSE" = "y" ]; then
         VERBOSE_FLAG="-vv"
-        COMP_NAME=$COMP_NAME+"_verbose"
+        COMP_NAME=$COMP_NAME"_verbose"
         break;
     elif [ "$VERBOSE" = "no" ] || [ "$VERBOSE" = "n" ]; then
         VERBOSE_FLAG=
@@ -52,7 +52,7 @@ while true ; do
     fi
 done
 
-FINAL_NAME="${NAME}${COMP_NAME}.scan"
+FINAL_NAME="${NAME}${COMP_NAME}"
 
 printf "\n[+] Procceeding to scan the open ports with your settings..."
 nmap "$AGGRESIVE_FLAG" "$VERBOSE_FLAG" -oN "${FINAL_NAME}.scan" -p"$PORTS" "$IP" 2>/dev/null
