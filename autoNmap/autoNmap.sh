@@ -12,7 +12,8 @@ PORTS=$(nmap -p- --min-rate=1000 -T4 "$IP" | grep "^[0-9]" | cut -d '/' -f 1 | t
 
 printf "[!] Done!\nHere is a summary of the ports you will be messing with this time:\n"
 
-for PORT in $("$PORTS" | tr ',' '\n')
+
+for PORT in $(echo "$PORTS" | tr ',' '\n')
 do 
     echo "Port '$PORT'."
 done
