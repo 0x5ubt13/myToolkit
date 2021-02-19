@@ -23,3 +23,8 @@ Try it straight away with this oneliner:
 ```sh
 git clone https://github.com/0x5ubt13/myToolkit.git && cd ./myToolkit/autoNmap/ && chmod +x ./autoNmap.sh && ./autoNmap.sh
 ```
+
+
+To Do:
+- Implement ability to directly pass arguments whilst calling the script
+- Experimenting with nice colors
