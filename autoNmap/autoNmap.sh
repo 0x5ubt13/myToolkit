@@ -13,30 +13,13 @@ errorMsg() {
 
 # Usage
 usage(){
-    printf "usage: %s [OPTIONS]\n -v\tVerbose\n -A\tAggresive\n -h\tDisplay this help and exit" "$0" 1>&2; exit 1;
+    printf "Usage: %s <IP> <Name> [OPTIONS]\n -v\tVerbose\n -A\tAggresive\n -h\tDisplay this help and exit" "$0" 1>&2; exit 1;
 }
-
-echo "Welcome to autoNmap for quickly scanning your box, by 0x5ubt13!"
-
-echo "Enter IP to attack:"
-read -r IP
-echo "Enter name of the box to name the file:";
-read -r NAME
-
-echo "${green}[+] Scanning for open ports...";
-PORTS=$(nmap -p- --min-rate=1000 -T4 "$IP" | grep "^[0-9]" | cut -d '/' -f 1 | tr '\n' ',' | sed "s/,$//");
-
-printf "[+] Done! Here is a summary of the ports you will be messing with this time:\n";
-
-for PORT in $(echo "$PORTS" | tr ',' '\n')
-do 
-    echo "Port $PORT."
-done
 
 while getopts "h:v:A:" flag
 do
     case "${flag}" in
-        h)  usage;;
+        h)  usage; exit 1;;
 
         v)  VERBOSE_FLAG="-vv";
             COMP_NAME="$COMP_NAME""_verbose";
@@ -52,40 +35,34 @@ do
     esac
 done
 
-# while true ; do
-#     echo "[?] Do you want this scan aggresive (flag -A)? (yes/no):"
-#     read -r AGGR
-#     AGGRESIVE=$(echo "$AGGR" | awk '{print tolower($0)}')
+echo "Welcome to autoNmap for a quick port sweep, by ${green}0x5ubt13!${reset}"
 
-#     if [ "$AGGRESIVE" = "yes" ] || [ "$AGGRESIVE" = "y" ]; then
-#         AGGRESIVE_FLAG="-A"
-#         COMP_NAME="_aggresive"
-#         break;
-#     elif [ "$AGGRESIVE" = "no" ] || [ "$AGGRESIVE" = "n" ]; then
-#         AGGRESIVE_FLAG="-sS"
-#         COMP_NAME="_stealthy"
-#         break;
-#     else
-#         printf '[!] Sorry, you need to enter either "yes" or "no"\n'
-#     fi
-# done
+if [ -n "$1" ]; then
+IP="$1"
+else
+errorMsg "You must provide an IP address"
+echo "Please enter IP to attack:"
+read -r IP
+fi
 
-# while true ; do
-#     echo "Do you want this scan verbose? (yes/no):"
-#     read -r VERB
-#     VERBOSE=$(echo "$VERB" | awk '{print tolower($0)}')
+if [ -n "$2" ]; then
+NAME="$2"
+else
+echo "Enter name of the box to name the file:"
+read -r NAME
+fi
 
-#     if [ "$VERBOSE" = "yes" ] || [ "$VERBOSE" = "y" ]; then
-#         VERBOSE_FLAG="-vv"
-#         COMP_NAME=$COMP_NAME"_verbose"
-#         break;
-#     elif [ "$VERBOSE" = "no" ] || [ "$VERBOSE" = "n" ]; then
-#         VERBOSE_FLAG=
-#         break;
-#     else
-#         printf 'Sorry, you need to enter either "yes" or "no"\n'
-#     fi
-# done
+printf "${green}[+] Scanning %s for any TCP open ports..." "$IP"
+PORTS=$(nmap -p- --min-rate=1000 -T4 "$IP" | grep "^[0-9]" | cut -d '/' -f 1 | tr '\n' ',' | sed "s/,$//")
+
+printf "[+] Done! Here is a summary of the open ports in %s:\n" "IP"
+
+for PORT in $(echo "$PORTS" | tr ',' '\n')
+do 
+    echo "Port $PORT."
+done
+
+
 
 FINAL_NAME="${NAME}${COMP_NAME}"
 
