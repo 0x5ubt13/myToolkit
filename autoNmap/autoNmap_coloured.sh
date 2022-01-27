@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# Timing the script
+start=$(date +%s)
+
 # Colours
 red=$(tput setaf 1);
 green=$(tput setaf 2);
@@ -37,10 +40,11 @@ done
 
 echo "Welcome to autoNmap for a quick port sweep, by ${green}0x5ubt13!${reset}"
 
+
 if [ -n "$1" ]; then
 IP="$1"
 else
-errorMsg "You must provide an IP address"
+errorMsg "You must provide an IP address as first argument"
 echo "Please enter IP to attack:"
 read -r IP
 fi
@@ -48,21 +52,13 @@ fi
 if [ -n "$2" ]; then
 NAME="$2"
 else
-echo "Enter name of the box to name the file:"
-read -r NAME
+errorMsg "Second argument must be name of output file"
 fi
 
 printf "${green}[+] Scanning %s for any TCP open ports..." "$IP"
-PORTS=$(nmap -p- --min-rate=1000 -T4 "$IP" | grep "^[0-9]" | cut -d '/' -f 1 | tr '\n' ',' | sed "s/,$//")
+PORTS=$(nmap --min-rate=2000 -p- -T5 "$IP" | grep "^[0-9]" | cut -d '/' -f 1 | tr '\n' ',' | sed "s/,$//")
 
-printf "[+] Done! Here is a summary of the open ports in %s:\n" "IP"
-
-for PORT in $(echo "$PORTS" | tr ',' '\n')
-do 
-    echo "Port $PORT."
-done
-
-
+echo "$PORTS"
 
 FINAL_NAME="${NAME}${COMP_NAME}"
 
@@ -70,4 +66,10 @@ echo "${yellow}[+] Procceeding to scan the open ports with your settings...${res
 
 nmap -sS -v "$AGGRESIVE_FLAG" "$VERBOSE_FLAG" -oN "${FINAL_NAME}".scan -p"$PORTS" "$IP"
 
-printf "${green}[+] Done! you file has been saved as %s.scan" "$FINAL_NAME"
+# printf "${green}[+] Done! you file has been saved as %s.scan" "$FINAL_NAME"
+printf "[+] Done! you file has been saved as %s.scan" "$FINAL_NAME"
+
+# Getting runtime
+end=$(date +%s)
+runtime=$((end - start))
+printf "\n[+] It took %s seconds to scan your target!!" "$runtime"
