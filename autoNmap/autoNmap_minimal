@@ -3,51 +3,72 @@
 # Timing the script!
 start=$(date +%s)
 
-# Colours
-# red=$(tput setaf 1);
-# green=$(tput setaf 2);
-# yellow=$(tput setaf 3);
-# reset=$(tput sgr0);
+# Now with colours!
+NCLR='\033[0m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
 
 # Error msg
 errorMsg() {
-	#echo "${red}[-] Error: $1 ${reset}" >&2;
     echo "[-] Error: $1" >&2;
 }
 
 # Usage
-usage(){
-    printf "Usage: %s <IP> <Name> [OPTIONS]\n -v\tVerbose\n -A\tAggresive\n -h\tDisplay this help and exit" "$0" 1>&2; exit 1;
+usage() {
+    echo
+    printf 'Usage: %s <Target-IP / Targets file> <Output filename> ' "$(basename "$0")"
+    printf '%s\t-v : %s Verbose\n -A\tAggresive\n -h\tDisplay this help and exit -t\tTarget(s) to attack. It can be a targets file.' "$YELLOW" "$NCLR"
+    printf '%s\t-v : %s Verbose\n -A\tAggresive\n -h\tDisplay this help and exit -t\tTarget(s) to attack. It can be a targets file.' "$YELLOW" "$NCLR"
 }
 
-while getopts "h:v:A:" flag
+waitforit() {
+	pids=($@)
+	for p in ${pids[*]}; do
+		wait $p
+	done
+}
+
+
+noDnsResolv=0
+dnsServers="-n"
+
+while getopts "-h:-v:-a:-t:" flag
 do
     case "${flag}" in
-        h)  usage; exit 1;;
+    -h)  
+    usage; 
+    exit 1;
+    ;;
 
-        v)  VERBOSE_FLAG="-vv";
-            COMP_NAME="$COMP_NAME""_verbose";
-            ;;
+    -v)  
+    VERBOSE_FLAG="-vv";
+    COMP_NAME="$COMP_NAME""_verbose";
+    ;;
 
-        A)  AGGRESIVE_FLAG="-A";
-            COMP_NAME="$COMP_NAME""_aggressive";
-            ;;
+    -a)  
+    AGGRESIVE_FLAG="-A";
+    COMP_NAME="$COMP_NAME""_aggressive";
+    ;;
 
-        *)  errorMsg "Invalid options provided";
-			usage;
-			;;
+    t)	
+    TARGET_NAME=${OPTARG};
+    verboseMsg "Target name is '${OPTARG}'";
+	;;
+
+    *) 
+    errorMsg "Invalid options provided";
+	usage;
+	;;
     esac
 done
 
-#echo "Welcome to autoNmap for a quick port sweep, by ${green}0x5ubt13!${reset}"
-echo "Welcome to autoNmap for a quick port sweep, by 0x5ubt13!"
 
-if [ -n "$1" ]; then
+if [ -n "$TARGET_NAME" ]; then
 IP="$1"
 else
-errorMsg "You must provide an IP address as first argument"
-echo "Please enter IP to attack:"
-read -r IP
+errorMsg "You must provide a Target hostname/IP address to start the attack"
+usage
 fi
 
 if [ -n "$2" ]; then

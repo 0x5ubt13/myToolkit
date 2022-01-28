@@ -1,9 +1,9 @@
 FROM alpine:latest
 
-COPY . /usr/local/sbin/
+COPY ./autoNmap_minimal /usr/local/sbin/autoNmap
 
-RUN apk update && apk add \ 
+RUN apk update && apk add --no-cache \
     nmap && \
-    rm -rf /var/cache/apk/*
+    rm -f /tmp/* /etc/apk/cache/*
 
 ENTRYPOINT [ "autoNmap" ]
