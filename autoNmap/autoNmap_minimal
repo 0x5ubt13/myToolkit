@@ -1,106 +1,118 @@
 #!/bin/sh
 
-# Timing the script!
-start=$(date +%s)
+# ---------- Constants ----------
+RESTORE="\033[0m"
+RED="\033[031m"
+GREEN="\033[32m"
+YELLOW="\033[33m"
+START=$(date +%s) # Timing the execution 
 
-# Now with colours!
-NCLR='\033[0m'
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
+# ---------- Functions ----------
 
-# Error msg
-errorMsg() {
-    echo "[-] Error: $1" >&2;
-}
-
-# Usage
+# Print usage and exit
 usage() {
     echo
-    printf 'Usage: %s <Target-IP / Targets file> <Output filename> ' "$(basename "$0")"
-    printf '%s\t-v : %s Verbose\n -A\tAggresive\n -h\tDisplay this help and exit -t\tTarget(s) to attack. It can be a targets file.' "$YELLOW" "$NCLR"
-    printf '%s\t-v : %s Verbose\n -A\tAggresive\n -h\tDisplay this help and exit -t\tTarget(s) to attack. It can be a targets file.' "$YELLOW" "$NCLR"
+    printf "${GREEN}Usage: ${RESTORE}%s <Target-IP / Targets file> <Output filename>\n" "$(basename "$0")"
+    printf "${YELLOW}\t-h : ${RESTORE} Display this help and exit.\n"
+    printf "${YELLOW}\t-o : ${RESTORE} Change the default output directory from [/cwd/autoNmap/<tool output>] to [<your/path>/autoNmap/<tool output>]\n"
+    printf "${YELLOW}\nExamples: \n\t%s 10.129.121.60 TEST-012 \n\t%s 192.168.0.254 router\n" "$(basename "$0")" "$(basename "$0")"
+    exit 1
 }
 
-waitforit() {
-	pids=($@)
-	for p in ${pids[*]}; do
-		wait $p
-	done
+# Print red error messages and call usage
+error_msg() {
+    printf "${RED}[-] Error: $1 %s" >&2 
+    usage
 }
 
-
-noDnsResolv=0
-dnsServers="-n"
-
-while getopts "-h:-v:-a:-t:" flag
+# Optional parameters
+while getopts "hp" flag
 do
     case "${flag}" in
-    -h)  
-    usage; 
-    exit 1;
-    ;;
-
-    -v)  
-    VERBOSE_FLAG="-vv";
-    COMP_NAME="$COMP_NAME""_verbose";
-    ;;
-
-    -a)  
-    AGGRESIVE_FLAG="-A";
-    COMP_NAME="$COMP_NAME""_aggressive";
-    ;;
-
-    t)	
-    TARGET_NAME=${OPTARG};
-    verboseMsg "Target name is '${OPTARG}'";
-	;;
-
-    *) 
-    errorMsg "Invalid options provided";
-	usage;
-	;;
+    h) usage;;
+    p) ;; #Placeholder, for the future
+    *) error_msg "Invalid options provided"; usage;;
     esac
 done
 
+# Wait for other processes to finish
+# TODO wait_for_it() {}
 
-if [ -n "$TARGET_NAME" ]; then
-IP="$1"
+# Quickly scan all TCP ports and save them to $PORTS
+ports_sweep() {
+    printf "${YELLOW}Starting nmap scan against ${RESTORE}%s${GREEN} for any TCP open ports..." "$IP"
+    PORTS=$(nmap --min-rate=2000 -p- -T5 "$IP" | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
+
+    echo "$PORTS" > "$dir""$name".txt
+    printf "${GREEN}[+] Done! Open ports in ${YELLOW}%s${GREEN} saved as ${YELLOW}%s.txt${RESET}\n" "$IP" "$dir$name"   
+}
+
+# Proceed with a quick normal scan 
+normal_scan() { 
+    nmap -sV -vv -oA "$dir$name" -p"$PORTS" "$IP"
+}
+
+# Proceed with an aggressive scan
+#TODO aggressive_scan() {}
+
+# UDP scan
+#TODO udp_scan() {}
+
+# Let the fun begin!
+main() {
+    ports_sweep
+    normal_scan
+}
+
+# ---------- Final checks, ensuring everything is ready to run ----------
+
+# Ensure theres a target
+if [ -n "$1" ]; then
+    IP="$1"
 else
-errorMsg "You must provide a Target hostname/IP address to start the attack"
-usage
+    errorMsg "You must provide a Target hostname/IP address to start the attack"
 fi
 
+# Ensure $IP is an IP or a URL
+if ! expr "${IP}" : "^\([0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\)$" >/dev/null && \
+   ! expr "${IP}" : "^\(\([[:alnum:]-]\{1,63\}\.\)*[[:alpha:]]\{2,6\}\)$" >/dev/null; then
+    error_msg "Invalid IP or URL!"
+    usage
+fi
+
+# Ensure output files are named
 if [ -n "$2" ]; then
-NAME="$2"
+    name="$2"
 else
-errorMsg "Second argument must be name of output file"
+    errorMsg "Second argument must be name of output files"
 fi
 
-printf "[+] Scanning %s for any TCP open ports..." "$IP"
-# printf "${green}[+] Scanning %s for any TCP open ports..." "$IP"
-PORTS=$(nmap --min-rate=2000 -p- -T5 "$IP" | grep "^[0-9]" | cut -d '/' -f 1 | tr '\n' ',' | sed "s/,$//")
-#PORTS=$(nmap -p- --min-rate=1000 -T4 "$IP" | grep "^[0-9]" | cut -d '/' -f 1 | tr '\n' ',' | sed "s/,$//")
-
-# printf "[+] Done! Here is a summary of the open ports in %s:\n" "$IP"
-
-# for PORT in $(echo "$PORTS" | tr ',' '\n')
-# do 
-#     echo "Port $PORT."
-# done
+# Ensure output directory is correctly set and exists
+## TODO: create option to set custom directory if launched autonomously outside Docker
+pwd=$(pwd)
+if [ ! -d "${pwd}/nmap" ]; then
+    mkdir "$pwd/nmap"
+fi
+dir="$pwd/nmap/"
 
 
-FINAL_NAME="${NAME}${COMP_NAME}"
+# nmap -sS -v "$AGGRESIVE_FLAG" "$VERBOSE_FLAG" -oN "${FINAL_NAME}".scan -p"$PORTS" "$IP"
+# printf "%s[+] Done! your file has been saved as %s.scan" "$GREEN" "$FINAL_NAME"
 
-# echo "${yellow}[+] Procceeding to scan the open ports with your settings...${reset}"
-echo "[+] Procceeding to scan the open ports with your settings..."
 
-nmap -sS -v "$AGGRESIVE_FLAG" "$VERBOSE_FLAG" -oN "${FINAL_NAME}".scan -p"$PORTS" "$IP"
+# ---------------------------------
+#                START
+# ---------------------------------
+echo
+printf "${GREEN}---------- Running with the following settings: ----------\n"
+printf "[+] Using ${RESTORE}'%s'${GREEN} as target\n" "$IP"
+printf "[+] Using ${RESTORE}'%s'${GREEN} as name for the output files\n" "$name"
+printf "\n${YELLOW}[!] Start!\n"
+printf "${RESTORE}"
 
-# printf "${green}[+] Done! you file has been saved as %s.scan" "$FINAL_NAME"
-printf "[+] Done! you file has been saved as %s.scan" "$FINAL_NAME"
+main
 
-# Getting runtime
-end=$(date +%s)
-runtime=$((end - start))
-printf "\n[+] It took %s seconds to scan your target!!" "$runtime"
+# Getting timing score
+END=$(date +%s)
+runtime=$((END - START))
+printf "\n${GREEN}[+] It took %s seconds to scan your target!!\n" "$runtime"
