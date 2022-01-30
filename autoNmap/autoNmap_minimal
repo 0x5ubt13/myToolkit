@@ -12,48 +12,52 @@ START=$(date +%s) # Timing the execution
 # Print usage and exit
 usage() {
     echo
-    printf "${GREEN}Usage: ${RESTORE}%s <Target-IP / Targets file> <Output filename>\n" "$(basename "$0")"
+    printf "${GREEN}Usage: ${RESTORE}%s [OPTIONS] <Target-IP / Targets file> <Output filename>\n" "$(basename "$0")"
     printf "${YELLOW}\t-h : ${RESTORE} Display this help and exit.\n"
-    printf "${YELLOW}\t-o : ${RESTORE} Change the default output directory from [/cwd/autoNmap/<tool output>] to [<your/path>/autoNmap/<tool output>]\n"
-    printf "${YELLOW}\nExamples: \n\t%s 10.129.121.60 TEST-012 \n\t%s 192.168.0.254 router\n" "$(basename "$0")" "$(basename "$0")"
+    printf "${YELLOW}\t-A : ${RESTORE} Launch ${YELLOW}nmap -A${RESTORE} instead of ${YELLOW}nmap -sS${RESTORE}.\n"
+    #TODO: printf "${YELLOW}\t-o : ${RESTORE} Change the default output directory from [/cwd/autoNmap/<tool output>] to [<your/path>/autoNmap/<tool output>]\n"
+    printf "${GREEN}\nExamples: \n\t%s 10.129.121.60 TEST-012 \n\t%s 192.168.0.254 router\n\t%s -A 10.10.14.80 previse_htb" "$(basename "$0")" "$(basename "$0")" "$(basename "$0")"
     exit 1
 }
 
 # Print red error messages and call usage
 error_msg() {
-    printf "${RED}[-] Error: $1 %s" >&2 
-    usage
+    printf "${RED}[-] Error: $1 %s" 1>&2; usage;
 }
 
-# Optional parameters
-while getopts "hp" flag
-do
+# ---------- Optional parameters ----------
+while getopts ":h:A:" flag; do
     case "${flag}" in
     h) usage;;
-    p) ;; #Placeholder, for the future
+    A) aggro=true;;
     *) error_msg "Invalid options provided"; usage;;
     esac
 done
+shift $((OPTIND-1))
+
 
 # Wait for other processes to finish
 # TODO wait_for_it() {}
 
+# ---------- SCANS ----------
 # Quickly scan all TCP ports and save them to $PORTS
 ports_sweep() {
-    printf "${YELLOW}Starting nmap scan against ${RESTORE}%s${GREEN} for any TCP open ports..." "$IP"
+    printf "\n${YELLOW}Starting nmap port discovery scan against ${RESTORE}%s${YELLOW} for any TCP open ports...\n" "$IP"
     PORTS=$(nmap --min-rate=2000 -p- -T5 "$IP" | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
 
-    echo "$PORTS" > "$dir""$name".txt
-    printf "${GREEN}[+] Done! Open ports in ${YELLOW}%s${GREEN} saved as ${YELLOW}%s.txt${RESET}\n" "$IP" "$dir$name"   
+    echo "$PORTS" > "$dir""$name"_ports.txt
+    printf "\n${GREEN}[+] Done! Open ports in ${YELLOW}%s${GREEN} saved as ${YELLOW}%s%s_ports.txt${GREEN} in nmap-friendly format.${RESTORE}\n\n" "$IP" "$dir" "$name"   
 }
 
 # Proceed with a quick normal scan 
-normal_scan() { 
-    nmap -sV -vv -oA "$dir$name" -p"$PORTS" "$IP"
+stealthy_scan() { 
+    nmap -sS -vv -oA "$dir"quick_"$name" -p"$PORTS" "$IP"
 }
 
 # Proceed with an aggressive scan
-#TODO aggressive_scan() {}
+aggressive_scan() {
+    nmap -A -vv -oA "$dir"aggressive_"$name" -p"$PORTS" "$IP"
+}
 
 # UDP scan
 #TODO udp_scan() {}
@@ -61,7 +65,11 @@ normal_scan() {
 # Let the fun begin!
 main() {
     ports_sweep
-    normal_scan
+    if [ ! "$aggro" ]; then
+        stealthy_scan
+    else
+        aggressive_scan
+    fi
 }
 
 # ---------- Final checks, ensuring everything is ready to run ----------
@@ -74,8 +82,8 @@ else
 fi
 
 # Ensure $IP is an IP or a URL
-if ! expr "${IP}" : "^\([0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\)$" >/dev/null && \
-   ! expr "${IP}" : "^\(\([[:alnum:]-]\{1,63\}\.\)*[[:alpha:]]\{2,6\}\)$" >/dev/null; then
+if ! expr "${IP}" : "\([0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\)" >/dev/null && \
+   ! expr "${IP}" : "\(\([[:alnum:]-]\{1,63\}\.\)*[[:alpha:]]\{2,6\}\)" >/dev/null; then
     error_msg "Invalid IP or URL!"
     usage
 fi
@@ -89,12 +97,15 @@ fi
 
 # Ensure output directory is correctly set and exists
 ## TODO: create option to set custom directory if launched autonomously outside Docker
-pwd=$(pwd)
-if [ ! -d "${pwd}/nmap" ]; then
-    mkdir "$pwd/nmap"
+if test "$(pwd)" = "/"; then
+    dir="/nmap/"
+else
+    dir="$(pwd)/nmap"
 fi
-dir="$pwd/nmap/"
 
+if [ ! -d "$dir" ]; then
+    mkdir "$dir"
+fi
 
 # nmap -sS -v "$AGGRESIVE_FLAG" "$VERBOSE_FLAG" -oN "${FINAL_NAME}".scan -p"$PORTS" "$IP"
 # printf "%s[+] Done! your file has been saved as %s.scan" "$GREEN" "$FINAL_NAME"
@@ -104,15 +115,22 @@ dir="$pwd/nmap/"
 #                START
 # ---------------------------------
 echo
-printf "${GREEN}---------- Running with the following settings: ----------\n"
-printf "[+] Using ${RESTORE}'%s'${GREEN} as target\n" "$IP"
+printf "${GREEN}[+] Using ${RESTORE}'%s'${GREEN} as target\n" "$IP"
 printf "[+] Using ${RESTORE}'%s'${GREEN} as name for the output files\n" "$name"
-printf "\n${YELLOW}[!] Start!\n"
-printf "${RESTORE}"
+printf "[+] Using ${RESTORE}'%s'${GREEN} as directory for the output files \n" "$dir"
+if [ "$aggro" ]; then
+    printf "[+] Using ${RESTORE}-A${GREEN} flag for the scans\n"
+else
+    printf "[+] Using ${RESTORE}-sS${GREEN} flag for the scans\n"
+fi
 
+# Call main
 main
 
 # Getting timing score
 END=$(date +%s)
 runtime=$((END - START))
-printf "\n${GREEN}[+] It took %s seconds to scan your target!!\n" "$runtime"
+printf "\n${GREEN}[+] All done! It took %s seconds to scan your target based on your settings!!\n" "$runtime"
+
+# debug
+ls -la $dir
