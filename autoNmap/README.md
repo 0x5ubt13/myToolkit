@@ -9,7 +9,7 @@ What if I told you: not anymore! With this tool you can automate the process and
 ## Requisites
 
 - If you run it alone, it's POSIX compliant, so just a shell would do.
-- If you want the full experience, you will need to have Docker installed and the Docker Engine running (recommended!!)
+- (Recommended!! ->) If you want the full experience, you will need to have Docker installed and the Docker Engine running 
 
 ## But... Why?
 
@@ -17,15 +17,15 @@ I know there are other cooler tools out there, like [nmapAutomator](https://gith
 
 You will find the Docker image to be as slim as possible. This is, an Alpine distro with the bare minimums for Nmap to be able to run. 
 
-The coolest thing? If you use [selfDeploy](./selfDeploy.sh), you will only need to do the following:
+The coolest thing? If you use the [autoNmap self-deployer](./autoNmap_self_deploy.sh), you will only need to do the following:
 
 ```sh
-./selfDeploy.sh <Target/TargetsFile> <outputName>
+./autoNmap_self_deploy.sh <Target/TargetsFile> <outputName>
 ```
 
 ... and it will, without you doing anything:
 
-1. Build the Docker image and load `autoNmap` inside it
+1. Build/pull the Docker image and load `autoNmap` inside it
 2. Create `./nmap/` directory in your current folder
 3. Start scanning your target or your list of targets, one by one, only attacking those ports that it finds open, both TCP and the top 1000 UDP ports. (If you want more UDP ports to be scanned, feel free to edit [line 86 of autoNmap](https://github.com/0x5ubt13/myToolkit/blob/dc49f922634373ddbbcac356fabd35e780fa6d5e/autoNmap/autoNmap#L86)
 4. It will be saving all the Nmap output files in the `./nmap/` dir we created earlier. Check those initial scans while you wait for the aggressive / UDP ones!
