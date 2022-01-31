@@ -1,6 +1,6 @@
 FROM alpine:latest
 
-COPY ./autoNmap_minimal /usr/local/sbin/autoNmap
+COPY ./autoNmap /usr/local/sbin/autoNmap
 
 RUN apk update && apk add --no-cache \
     nmap \
