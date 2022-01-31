@@ -52,7 +52,11 @@ fi
 
 # ---------- All good! Pull the container and do some dockery + nmap magic ----------
 mkdir "nmap"; cd "./nmap/"
-docker build --network host -t autonmap . 
-docker run --network host -v "$(pwd)":/nmap --name autodeployed autonmap "$1" "$2"
+if [ -f ./Dockerfile ]; then
+    docker build --network host -t gagarter/autonmap . 
+else
+    docker pull gagarter/autonmap
+fi
+docker run --network host -v "$(pwd)":/nmap --name autodeployed gagarter/autonmap "$1" "$2"
 printf "[+] Cleaning myself up: killing container -> "
 docker rm autodeployed

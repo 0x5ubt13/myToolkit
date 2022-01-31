@@ -199,4 +199,4 @@ main
 END=$(date +%s)
 runtime=$((END - START))
 printf "\n${GREEN}[+] All done! It took %s seconds to run the scan based on your settings\n" "$runtime"
-printf "[+] Your files are available at ${RESTORE}'./%s'${GREEN}" "$dir"
+printf "[+] Your files are available at ${RESTORE}'.%s'${GREEN}\n" "$dir"
