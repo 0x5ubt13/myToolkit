@@ -15,9 +15,10 @@ What if I told you: not anymore! With this tool you can automate the process and
 
 I know there are other cooler tools out there, like [nmapAutomator](https://github.com/21y4d/nmapAutomator), but I wanted to test my skills and create my own cool, slim, dockerised tool for a quick deployment and, you know, I love to see how it destructs itself!
 
-You will find the Docker image to be as slim as possible. This is, an Alpine distro with the bare minimums for Nmap to be able to run. 
+You will find the Docker image to be as slim as possible. This is, an Alpine distro with the bare minimums for Nmap to be able to run. Only **11.33MB**!!
 
-The coolest thing? If you use the [autoNmap self-deployer](./autoNmap_self_deploy.sh), you will only need to do the following:
+
+The coolest thing? If you use my [autoNmap self-deployer](https://github.com/0x5ubt13/myToolkit/blob/main/autoNmap/autoNmap_self_deploy.sh), you will only need to do the following:
 
 ```sh
 ./autoNmap_self_deploy.sh <Target/TargetsFile> <outputName>
@@ -40,7 +41,8 @@ curl -LJO https://raw.githubusercontent.com/0x5ubt13/myToolkit/main/autoNmap/aut
 
 ## Disclaimer
 
-As you see, a lot of dangerous `sudo` stuff happens behind the scenes. All the code involved is here for you to review. Make sure you know what you are doing. If you have any doubts, feel free to reach out. You know all the legal jargon like "don't use this stuff for illegal purposes".
+As you see, a lot of dangerous `sudo` stuff happens behind the scenes. All the code involved is here for you to review, so make sure you know what you are doing and if you have any doubts, feel free to reach out.
+
 
 ### To Do:
 
