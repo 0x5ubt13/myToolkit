@@ -36,7 +36,7 @@ The coolest thing? If you use my [autoNmap self-deployer](https://github.com/0x5
 Try it straight away with this one-liner:
 
 ```sh
-curl -LJO https://raw.githubusercontent.com/0x5ubt13/myToolkit/main/autoNmap/autoNmap_self_deploy.sh; ./autoNmap_self_deploy.sh 127.0.0.1 localhost_test
+curl -LJO https://raw.githubusercontent.com/0x5ubt13/myToolkit/main/autoNmap/autoNmap_self_deploy.sh; sh ./autoNmap_self_deploy.sh 127.0.0.1 localhost_test
 ```
 
 ## Disclaimer
