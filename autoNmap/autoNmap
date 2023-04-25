@@ -75,21 +75,21 @@ stealthy_scan() {
 # Proceed with an aggressive scan
 aggressive_scan() {
     printf "${YELLOW}[+] Starting aggressive scan against ${RESTORE}'%s'\n" "$1"
-    nmap -A -vv "$ping" -oA "${dir}aggressive_${name}${2}-$1" -p"$ports" "$1" 
+    nmap -A -vv "$ping" --script=vuln -oA "${dir}aggressive_${name}${2}-$1" -p"$ports" "$1" 
     printf "\n${GREEN}[+] Done! Aggressive scan against ${RESTORE}'%s'${GREEN} saved as ${RESTORE}"${dir}aggressive_${name}${2}$1" ${GREEN}in all formats.${RESTORE}\n\n" "$1"
 }
 
 # UDP scan
 udp_scan() {
     # First, check if there are any ports open and abort if there are none
-    printf "${YELLOW}[+] Starting UDP port scan against ${RESTORE}'%s' ${YELLOW}(only top 1000 ports, if you want a more thorough scan consider using a different tool or paste the following in your terminal:\nnmap -v %s --min-rate 200 --max-retries 7 %s -sV -sU %s -p%s -oA %s)\n" "$1" "$dnsServers" "$ping" "$1" "$udp_ports" "${dir}udp_${name}${2}"
+    printf "${YELLOW}[+] Starting UDP port scan against ${RESTORE}'%s' ${YELLOW}(only top 1000 ports, if you want a more thorough scan consider using a different tool or paste the following in your terminal:\nnmap -v %s --min-rate 200 --max-retries 7 %s -sUVC --script=vuln %s -p%s -oA %s)\n" "$1" "$dnsServers" "$ping" "$1" "$udp_ports" "${dir}udp_${name}${2}"
     udp_ports=$(nmap "$ping" "$dnsServers" --min-rate 1000  --max-retries 5 --top-ports 1000 -sU "$1" | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
 
     if [ -z "$udp_ports" ]; then
         printf "${RED}[-] No UDP ports found. Aborting UDP scans against ${RESTORE}'%s'\n" "$1"
     else
         printf "\n${GREEN}[+] UDP ports found.\n\n${YELLOW}[+] Starting UDP scan against ${RESTORE}'%s' ${RESTORE}\n" "$1"
-        nmap -v "$dnsServers" --min-rate 200 --max-retries 7 "$ping" -sV -sU "$1" -p"$udp_ports" -oA "${dir}udp_${name}${2}"
+        nmap -v "$dnsServers" --min-rate 200 --max-retries 7 "$ping" -sUVC --script=vuln "$1" -p"$udp_ports" -oA "${dir}udp_${name}${2}"
     fi
 }
 
