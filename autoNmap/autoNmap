@@ -121,8 +121,8 @@ main() {
 	    dir="$(pwd)/nmap/${target}/"
 	    printf "${RED}" # colouring red to catch mkdir's File exists error
 	    mkdir ${dir} 
-            printf "${GREEN}[+] Attacking target ${RESTORE}'%s${GREEN}/${RESTORE}%s'${GREEN}: ${RESTORE}'%s'\n" "$line" "$list_total_lines" "$target"
-            printf "${RED}TESTING!!${RESTORE} Saving all output of this target to ${dir}\n"
+            printf "${GREEN}[+] Attacking target ${RESTORE}'%s${GREEN}/${RESTORE}%s'${GREEN}: ${RESTORE}'%s'." "$line" "$list_total_lines" "$target"
+            printf "${GREEN} Saving all output of this target to ${RESTORE}${dir}\n"
 
             # TCP Scans
             # Abort if no ports were found open
