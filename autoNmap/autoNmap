@@ -68,15 +68,15 @@ ports_sweep() {
 # Proceed with a quick stealthy scan 
 stealthy_scan() { 
     printf "${YELLOW}[+] Starting stealthy TCP scan against ${RESTORE}'%s'\n" "$1"
-    nmap -sS -vv "$ping" -oA "${dir}quick_${name}${2}" -p"$ports" "$1"
-    printf "\n${GREEN}[+] Done! Stealthy scan against ${RESTORE}'%s'${GREEN} saved as ${RESTORE}${dir}stealthy_${name}${2}${GREEN} in all formats.${RESTORE}\n\n" "$1" 
+    nmap -sS -vv "$ping" -oA "${dir}quick_${name}${2}-$1" -p"$ports" "$1"
+    printf "\n${GREEN}[+] Done! Stealthy scan against ${RESTORE}'%s'${GREEN} saved as ${RESTORE}"${dir}stealthy_${name}${2}$1" ${GREEN}in all formats.${RESTORE}\n\n" "$1" 
 }
 
 # Proceed with an aggressive scan
 aggressive_scan() {
     printf "${YELLOW}[+] Starting aggressive scan against ${RESTORE}'%s'\n" "$1"
-    nmap -A -vv "$ping" -oA "${dir}aggressive_${name}${2}" -p"$ports" "$1"
-    printf "\n${GREEN}[+] Done! Aggressive scan against ${RESTORE}'%s'${GREEN} saved as ${RESTORE}${dir}aggressive_${name}${2}${GREEN} in all formats.${RESTORE}\n\n" "$1"
+    nmap -A -vv "$ping" -oA "${dir}aggressive_${name}${2}-$1" -p"$ports" "$1" 
+    printf "\n${GREEN}[+] Done! Aggressive scan against ${RESTORE}'%s'${GREEN} saved as ${RESTORE}"${dir}aggressive_${name}${2}$1" ${GREEN}in all formats.${RESTORE}\n\n" "$1"
 }
 
 # UDP scan
@@ -118,7 +118,11 @@ main() {
         while [ "$line" -le "$list_total_lines" ]; do
             target=$(sed "${line}q;d" "$IP" 2>/dev/null)
             target_number="_target_${line}"
+	    dir="$(pwd)/nmap/${target}/"
+	    printf "${RED}" # colouring red to catch mkdir's File exists error
+	    mkdir ${dir} 
             printf "${GREEN}[+] Attacking target ${RESTORE}'%s${GREEN}/${RESTORE}%s'${GREEN}: ${RESTORE}'%s'\n" "$line" "$list_total_lines" "$target"
+            printf "${RED}TESTING!!${RESTORE} Saving all output of this target to ${dir}\n"
 
             # TCP Scans
             # Abort if no ports were found open
@@ -173,7 +177,7 @@ fi
 if test "$(pwd)" = "/"; then
     dir="/nmap/"
 else
-    dir="$(pwd)/nmap"
+    dir="$(pwd)/nmap/"
 fi
 
 if [ ! -d "$dir" ]; then
@@ -190,7 +194,7 @@ else
     printf "[+] Successfully identified ${RESTORE}'%s'${GREEN} targets in the file\n" "$list_total_lines"
 fi
 printf "[+] Using ${RESTORE}'%s'${GREEN} as base name for the output files\n" "$name"
-printf "[+] Using ${RESTORE}'%s'${GREEN} as directory where to put the output files \n" "$dir"
+printf "[+] Using ${RESTORE}'%s'${GREEN} as directory where to put the output files\n" "$dir"
 
 # Call main
 main
