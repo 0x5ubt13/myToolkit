@@ -16,7 +16,7 @@ usage() {
     printf "${YELLOW}\t-h : ${RESTORE} Display this help and exit.\n"
     printf "${YELLOW}\t-d : ${RESTORE} Specify custom DNS servers. Default option: ${YELLOW}-n${RESTORE}.\n"
     #TODO: printf "${YELLOW}\t-o : ${RESTORE} Change the default output directory from [/cwd/autoNmap/<tool output>] to [<your/path>/autoNmap/<tool output>]\n"
-    printf "${GREEN}\nExamples: \n\t%s 10.129.121.60 TEST-012 \n\t%s 192.168.0.254 router\n\t%s -d <serv1[,serv2],...> 10.10.14.80 previse_htb" "$(basename "$0")" "$(basename "$0")" "$(basename "$0")"
+    printf "${GREEN}\nExamples: \n\t%s 10.129.121.60 TEST-012 \n\t%s 192.168.0.254 router\n\t%s -d <serv1[,serv2],...> 10.10.14.80 previse_htb\n" "$(basename "$0")" "$(basename "$0")" "$(basename "$0")"
     exit 1
 }
 
@@ -86,7 +86,7 @@ udp_scan() {
     udp_ports=$(nmap "$ping" "$dnsServers" --min-rate 1000  --max-retries 5 --top-ports 1000 -sU "$1" | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
 
     if [ -z "$udp_ports" ]; then
-        printf "${RED}[-] No UDP ports found. Aborting UDP scans against ${RESTORE}'%s'" "$1"
+        printf "${RED}[-] No UDP ports found. Aborting UDP scans against ${RESTORE}'%s'\n" "$1"
     else
         printf "\n${GREEN}[+] UDP ports found.\n\n${YELLOW}[+] Starting UDP scan against ${RESTORE}'%s' ${RESTORE}\n" "$1"
         nmap -v "$dnsServers" --min-rate 200 --max-retries 7 "$ping" -sV -sU "$1" -p"$udp_ports" -oA "${dir}udp_${name}${2}"
@@ -118,14 +118,14 @@ main() {
         while [ "$line" -le "$list_total_lines" ]; do
             target=$(sed "${line}q;d" "$IP" 2>/dev/null)
             target_number="_target_${line}"
-            printf "${GREEN}[+] Attacking target ${RESTORE}'%s${GREEN}/${RESTORE}%s'${GREEN}: ${RESTORE}'%s'" "$line" "$list_total_lines" "$target"
+            printf "${GREEN}[+] Attacking target ${RESTORE}'%s${GREEN}/${RESTORE}%s'${GREEN}: ${RESTORE}'%s'\n" "$line" "$list_total_lines" "$target"
 
             # TCP Scans
             # Abort if no ports were found open
             answers_icmp "$target"
             ports_sweep "$target" "$target_number"
             if [ "$result" -eq 1 ]; then 
-                printf "${RED}[-] No open ports were found in %s, aborting all TCP scans\n" "$IP"
+                printf "${RED}[-] No open ports were found in %s, aborting all TCP scans\n" "$target"
             else
                 stealthy_scan "$target" "$target_number"
                 aggressive_scan "$target" "$target_number"
