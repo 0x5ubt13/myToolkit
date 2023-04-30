@@ -55,7 +55,7 @@ answers_icmp() {
 # Quickly scan all TCP ports and save them to $ports
 ports_sweep() {
     printf "\n%b[+] Starting nmap SYN port discovery scan against %b'%s'%b, please bear with...\n" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"
-    ports=$(nmap --min-rate=2000 -p- -T4 "$ping" "$1" 2>/dev/null | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
+    ports="$(rustscan -a 10.129.150.224 --ulimit 5000 -g | cut -d ' ' -f 3 | sed 's/[^[:alnum:],\t]//g')"
     # Check there are ports in the var
     if [ -z "$ports" ]; then
         sweep_result=1
@@ -74,7 +74,7 @@ aggressive_scan() {
 
     printf "%b[+] Saving output to %b${dir}nmap %bin all formats.%b\n\n" "${GREEN}" "${RESTORE}" "${GREEN}" "${RESTORE}"
     
-    nmap "${1}" -sVC "$ping" --script=vuln -oA "${dir}nmap" -p"$ports" 2>/dev/null 1>/dev/null &
+    nmap "${1}" -vvv -sVC "$ping" --script=vuln -oA "${dir}nmap_scan" -p"$ports" > "${dir}"nmap_tailable_progress 2>&1 &
 }
 
 running_tool() {
@@ -83,20 +83,19 @@ running_tool() {
 
 # Let the fun begin! 
 main() {
-    # Perform CIDR enumeration first
-    # Check if CIDR argument was passed
+    # Perform CIDR enumeration first, check if CIDR argument was passed
     if [ -n "$cidr" ]; then
         # Create dir for output
-        cidr_dir="$dir${cidr}/"
+        cidr_dir="$dir${cidr}_range_enum/"
         mkdir "${cidr_dir}"
 
         # Run range tools
         printf "%b[+] CIDR range detected. Proceeding to scan range with range tools.${RESTORE}" "${GREEN}"
         running_tool "nbtscan-unixwiz" 
-        nbtscan-unixwiz -f "$cidr" | tee "${cidr_dir}"/nbtscan-unixwiz.out
+        nbtscan-unixwiz -f "$cidr" > "${cidr_dir}"nbtscan-unixwiz.out 2>&1 &
 
         running_tool "responder-RunFinger"
-        responder-RunFinger -i "$cidr" | tee "${cidr_dir}"/RunFinger.out
+        responder-RunFinger -i "$cidr" > "${cidr_dir}"RunFinger.out 2>&1 &
 
     else
         printf "%b[!] CIDR range not detected. Remember you can pass a range in CIDR notation to use enum tools that scan a wide range with ${GREEN}-r <IP address>/<network mask>${RESTORE}\n" "${YELLOW}"
@@ -118,13 +117,17 @@ main() {
 
         # Further Enum
         case "$ports" in
-            *80*|*443*)
+            *80*|*443*) 
                 printf "%b[+] Web service detected. Running Web enum tools%b\n" "${GREEN}" "${RESTORE}"
                 running_tool "nikto"
-                nikto -host "$IP" -Format txt -output "${dir}"nikto.out 2>/dev/null 1>/dev/null &
+                nikto -host "$IP" > "${dir}"nikto.out 2>&1 &
                 
                 running_tool "gobuster"
-                gobuster -z -q dir -e -u "$IP" -w /usr/share/wordlists/dirbuster/directory-list-lowercase-2.3-medium.txt -o "${dir}"gobuster.out 2>/dev/null 1>/dev/null &
+                gobuster -z -q dir -e -u "$IP" -w /usr/share/wordlists/dirbuster/directory-list-lowercase-2.3-medium.txt > "${dir}"gobuster.out 2>&1 &
+                ;;
+            *111*)
+                printf "%b[+] RPC service detected. Running RPC nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
+                nmap -p 111 --script=nfs-ls,nfs-statfs,nfs-showmount "$IP" -oA rpc_nmap_scan > rpc_tailable_nmap_scan 2>&1 &
                 ;;
             *139*|*445*)
                 printf "%b[+] SMB detected. Running SMB enum tools%b\n" "${GREEN}" "${RESTORE}"
