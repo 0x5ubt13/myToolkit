@@ -6,12 +6,6 @@ RED="\033[031m"
 GREEN="\033[32m"
 YELLOW="\033[33m"
 START="$(date +%s)" # Timing the execution 
-banner="              _____      __________                         
-______ ____  ___  /_________  ____/__________  ________ ___ 
-_  __ `/  / / /  __/  __ \_  __/  __  __ \  / / /_  __ `__ \
-/ /_/ // /_/ // /_ / /_/ /  /___  _  / / / /_/ /_  / / / / /
-\__,_/ \__,_/ \__/ \____//_____/  /_/ /_/\__,_/ /_/ /_/ /_/ 
-                                                    "
 
 # ---------- Functions ----------
 
@@ -89,7 +83,6 @@ running_tool() {
 
 # Let the fun begin! 
 main() {
-    printf "%s" "${banner}"
     # Perform CIDR enumeration first
     # Check if CIDR argument was passed
     if [ -n "$cidr" ]; then
@@ -187,6 +180,16 @@ main() {
 }
 
 # ---------- Final checks, ensuring everything is ready to run ----------
+
+# Check 0: Launch fancy banner!
+echo '
+              _____      __________                         
+______ ____  ___  /_________  ____/__________  ________ ___ 
+_  __ `/  / / /  __/  __ \_  __/  __  __ \  / / /_  __ `__ \
+/ /_/ // /_/ // /_ / /_/ /  /___  _  / / / /_/ /_  / / / / /
+\__,_/ \__,_/ \__/ \____//_____/  /_/ /_/\__,_/ /_/ /_/ /_/ 
+                    by 0x5ubt13                                                           
+'                                                
 
 # Check 1: Ensure there is a target
 if [ -n "$1" ]; then
