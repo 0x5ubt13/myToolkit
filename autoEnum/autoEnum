@@ -1,0 +1,243 @@
+#!/bin/sh
+
+# ---------- Constants ----------
+RESTORE="\033[0m"
+RED="\033[031m"
+GREEN="\033[32m"
+YELLOW="\033[33m"
+START=$(date +%s) # Timing the execution 
+
+# ---------- Functions ----------
+
+# Print usage and exit
+usage() {
+    echo
+    printf "${GREEN}Usage: ${RESTORE}%s [OPTIONS] <Single target/Targets file> <Output filename>\n" "$(basename "$0")"
+    printf "%s\t-h : %sDisplay this help and exit.\n" "${YELLOW}" "${RESTORE}"
+    printf "%s\t-d : %sSpecify custom DNS servers. Default option: %s-n%s.\n" "${YELLOW}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
+    printf "${GREEN}\nExamples: \n\t%s 10.129.121.60 TEST-012 \n\t%s 192.168.0.254 router\n\t%s -d <serv1[,serv2],...> 10.10.14.80 previse_htb\n" "$(basename "$0")" "$(basename "$0")" "$(basename "$0")"
+    exit 1
+}
+
+# Print red error messages and call usage
+error_msg() {
+    printf "${RED}[-] Error: $1 %s" 1>&2; usage;
+}
+
+# ---------- Optional parameters ----------
+# Defaults:
+dnsServers="-n"
+cidr=""
+
+while getopts ":h:c:A:d" flag; do
+    case "${flag}" in
+    h) usage;;
+    c) cidr="${OPTARG}";;
+    d) dnsServers="--dns-servers ${OPTARG}";;
+    A) ;; # Placeholder for future options
+    *) error_msg "Invalid options provided";;
+    esac
+done
+shift $((OPTIND-1))
+
+# Test whether the host is pingable and set -Pn accordingly
+answers_icmp() {
+        # If ping is not returned within a second, then ping scan is disabled with -Pn
+        ping_test="$(ping -c 1 -W 1 "$1" 2>/dev/null | grep ttl)"
+        if [ -z "${ping_test}" ]; then
+            printf "${RED}[-] Ping against ${RESTORE}'%s'${RED} not possible, using -Pn flag for the full scan\n" "$IP"
+            ping="-Pn"
+        else
+            ping=""
+        fi
+}
+
+# ---------- SCANS ----------
+# Quickly scan all TCP ports and save them to $ports
+ports_sweep() {
+    printf "\n${YELLOW}[+] Starting nmap TCP port discovery scan against ${RESTORE}'%s'${YELLOW}...\n" "$1"
+    ports=$(nmap --min-rate=2000 -p- -T5 "$ping" "$1" 2>/dev/null | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
+    # Check there are ports in the var
+    if [ -z "$ports" ]; then
+        result=1
+    else
+        echo "$ports" > "$dir""$name"_ports.txt
+        printf "\n${GREEN}[+] Done! Open ports in ${RESTORE}'%s'${GREEN} saved as ${RESTORE}%s%s_ports%s.txt${GREEN} in nmap-friendly format.${RESTORE}\n\n" "$1" "$dir" "$name" "$2"  
+    fi
+}
+
+# Proceed with a quick stealthy scan 
+stealthy_scan() { 
+    printf "${YELLOW}[+] Starting stealthy TCP scan against ${RESTORE}'%s'\n" "$1"
+    nmap -sS -vv "$ping" -oA "${dir}quick_${name}${2}-$1" -p"$ports" "$1"
+    printf "\n${GREEN}[+] Done! Stealthy scan against ${RESTORE}'%s'${GREEN} saved as ${RESTORE}"${dir}stealthy_${name}${2}$1" ${GREEN}in all formats.${RESTORE}\n\n" "$1" 
+}
+
+# Proceed with an aggressive scan
+aggressive_scan() {
+    printf "${YELLOW}[+] Starting aggressive scan against ${RESTORE}'%s'\n" "$1"
+    nmap -A -vv "$ping" --script=vuln -oA "${dir}aggressive_${name}${2}-$1" -p"$ports" "$1" 
+    printf "\n${GREEN}[+] Done! Aggressive scan against ${RESTORE}'%s'${GREEN} saved as ${RESTORE}"${dir}aggressive_${name}${2}$1" ${GREEN}in all formats.${RESTORE}\n\n" "$1"
+}
+
+# UDP scan
+udp_scan() {
+    # First, check if there are any ports open and abort if there are none
+    printf "${YELLOW}[+] Starting UDP port scan against ${RESTORE}'%s' ${YELLOW}(only top 1000 ports, if you want a more thorough scan consider using a different tool or paste the following in your terminal:\nnmap -v %s --min-rate 200 --max-retries 7 %s -sUVC --script=vuln %s -p%s -oA %s)\n" "$1" "$dnsServers" "$ping" "$1" "$udp_ports" "${dir}udp_${name}${2}"
+    udp_ports=$(nmap "$ping" "$dnsServers" --min-rate 1000  --max-retries 5 --top-ports 1000 -sU "$1" | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
+
+    if [ -z "$udp_ports" ]; then
+        printf "%s[-] No UDP ports found. Aborting UDP scans against %s'%s'\n" "${RED}" "${RESTORE}" "$1"
+    else
+        printf "\n%s[+] UDP ports found.\n\n%s[+] Starting UDP scan against %s'%s'%s\n" "${GREEN}" "${YELLOW}" "${RESTORE}" "$1" "${RESTORE}"
+        nmap -v "$dnsServers" --min-rate 200 --max-retries 7 "$ping" -sUVC --script=vuln "$1" -p"$udp_ports" -oA "${dir}udp_${name}${2}"
+    fi
+}
+
+running_tool() {
+    printf "\n%s[+] Now running %s%s\n" "${GREEN}" "$1" "${RESTORE}"
+}
+
+# Let the fun begin! 
+main() {
+    # Perform CIDR enumeration first
+    # Check if CIDR argument was passed
+    if [ -n "$cidr" ]; then
+        # Create dir for output
+        cidr_dir="$dir${cidr}/"
+        mkdir "${cidr_dir}"
+
+        # Run range tools
+        printf "%s[+] CIDR range detected. Proceeding to scan range with range tools.%s" "${GREEN}" "${RESTORE}"
+        running_tool "nbtscan-unixwiz"
+        nbtscan-unixwiz -f "$cidr" | tee "${cidr_dir}"/nbtscan-unixwiz.out
+        running_tool "responder-RunFinger"
+        responder-RunFinger -i "$cidr" | tee "${cidr_dir}"/RunFinger.out
+
+    else
+        printf "%s[!]CIDR range not detected. Remember you can pass a CIDR notation to use enum tools that scan a wide range with %s-c <IP address>/<network mask>%s" "${YELLOW}" "${GREEN}" "${RESTORE}"
+    fi
+
+    # Check whether input is a single or multiple target and loop accordingly
+    if [ ! -f "$IP" ]; then # Single target
+        # Checking whether the target is reachable via ping
+        answers_icmp "$IP"
+        ports_sweep "$IP"
+
+        # Make new folder and assign name
+        dir="${IP}/"
+        
+        # Nmap TCP Scans 
+        # Abort if no ports were found open
+        if [ "$result" -eq 1 ]; then 
+            printf "${RED}[-] No open ports were found in %s, aborting all TCP scans\n" "$IP"
+        else
+            # stealthy_scan "$IP"
+            aggressive_scan "$IP"
+        fi
+        # Nmap UDP scans
+        #udp_scan "$IP"
+
+        # Further Enum
+        nmblookup -A $target | tee $dir
+        smbclient //$target/share -I target -N
+        rpcclient -U "" target
+        enum4linux target
+
+    # Multi-target
+    else
+        # Loop through the targets and assign vars accordingly
+        line=1
+        while [ "$line" -le "$list_total_lines" ]; do
+            target=$(sed "${line}q;d" "$IP" 2>/dev/null)
+            target_number="_target_${line}"
+	    dir="$(pwd)/nmap/${target}/"
+	    printf "%s" "${RED}" # colouring red to catch mkdir's File exists error
+	    mkdir ${dir} 
+            printf "${GREEN}[+] Attacking target ${RESTORE}'%s${GREEN}/${RESTORE}%s'${GREEN}: ${RESTORE}'%s'." "$line" "$list_total_lines" "$target"
+            printf "${GREEN} Saving all output of this target to ${RESTORE}${dir}\n"
+
+            # Nmap TCP Scans
+            # Abort if no ports were found open
+            answers_icmp "$target"
+            ports_sweep "$target" "$target_number"
+            if [ "$result" -eq 1 ]; then 
+                printf "${RED}[-] No open ports were found in %s, aborting all TCP scans\n" "$target"
+            else
+                #stealthy_scan "$target" "$target_number"
+                aggressive_scan "$target" "$target_number"
+            fi
+            # Nmap UDP scan
+            #udp_scan "$target" "$target_number"
+
+            # Further Enum
+            
+
+
+            # Loop counter
+            line=$(( line + 1 ))
+        done
+    fi
+}
+
+# ---------- Final checks, ensuring everything is ready to run ----------
+
+# Check 1: Ensure there is a target
+if [ -n "$1" ]; then
+    IP="$1"
+else
+    error_msg "You must provide a Target hostname/IP address to start the attack"
+fi
+
+# Check 2: Determine whether it is a single target or multi-target
+if [ ! -f "$IP" ]; then # Single target
+    # Check 3: Ensure $IP is an IP or a URL
+    if ! expr "${IP}" : "\([0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\)" >/dev/null && \
+       ! expr "${IP}" : "\(\([[:alnum:]-]\{1,63\}\.\)*[[:alpha:]]\{2,6\}\)" >/dev/null; then
+        error_msg "Invalid IP or URL!"
+        usage
+    fi
+else
+    # Multi-target, check how many targets are there
+    list_total_lines=$(wc -l "$IP" | awk '{ print $1 }')
+fi
+
+# Check 4: Ensure output files are named
+if [ -n "$2" ]; then
+    name="$2"
+else
+    error_msg "Second argument must be name of output files"
+fi
+
+# Check 5: Ensure base output directory is correctly set and exists
+## TODO: create option to set custom directory if launched autonomously outside Docker
+if test "$(pwd)" = "/"; then
+    dir="/autoEnum/"
+else
+    dir="$(pwd)/autoEnum/"
+fi
+
+if [ ! -d "$dir" ]; then
+    mkdir "$dir"
+fi
+
+# ---------- Preliminary checks completed. Calling main function ----------
+# Single target
+if [ ! -f "$IP" ]; then 
+    printf "\n${GREEN}[+] Using ${RESTORE}'%s'${GREEN} as target\n" "$IP"
+# Multiple targets
+else 
+    printf "${GREEN}[+] Using ${RESTORE}'%s'${GREEN} as targets file\n" "$IP"
+    printf "[+] Successfully identified ${RESTORE}'%s'${GREEN} targets in the file\n" "$list_total_lines"
+fi
+printf "[+] Using ${RESTORE}'%s'${GREEN} as base name for the output files\n" "$name"
+printf "[+] Using ${RESTORE}'%s'${GREEN} as directory where to put the output files\n" "$dir"
+
+# Call main
+main
+
+# Getting timing score
+END=$(date +%s)
+runtime=$((END - START))
+printf "\n${GREEN}[+] All done! It took %s seconds to run the scan based on your settings\n" "$runtime"
+printf "[+] Your files are available at ${RESTORE}'.%s'${GREEN}\n" "$dir"
