@@ -8,7 +8,7 @@ In many jobs I found myself using autoNmap and extra enumeration tools afterward
 Give it either a single IP address or a file containing a list of IPs, a name to use for the output files, sit back, and relax:
 
 ~~~sh
-./autoEnum localhost my_test_enum
+./autoEnum localhost -r localhost/24
 ~~~
 
 NB: Nmap Stealthy scans and UDP scans are disabled for autoEnum for performance purposes. If you want these enabled just uncomment the lines on the script.
