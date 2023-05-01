@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # ---------- Constants ----------
 RESTORE="\033[0m"
@@ -105,51 +105,70 @@ main() {
     if [ ! -f "$IP" ]; then # Single target
         # Checking whether the target is reachable via ping
         answers_icmp "$IP"
-        ports_sweep "$IP"
+
+        # Do port discovery scan
+        ports_sweep "$IP" 
         
-        # Nmap TCP Scans 
-        # Abort if no ports were found open
+        # Abort tests if no ports were found open
         if [ "$sweep_result" -eq 1 ]; then 
             printf "${RED}[-] No open ports were found in %s, aborting all TCP scans\n" "$IP"
         else
             aggressive_scan "$IP"
+
+            # Convert comma-separated string to an array of ports
+            IFS=',' read -ra PORTS_ARRAY <<< "$ports" ## TODO: convert Here-Strings to POSIX
+    
+            # Iterate over each port in the array
+            for port in "${PORTS_ARRAY[@]}"; do ## TODO: convert array to POSIX
+                # Use a case statement to perform different actions for each port
+                case $port in
+                80|443)
+                    # Common Web 
+                    printf "%b[+] Web service detected. Running Web enum tools%b\n" "${GREEN}" "${RESTORE}"
+                    running_tool "nikto"
+                    nikto -host "$IP" >> "${dir}"nikto.out 2>&1 &
+                    
+                    running_tool "gobuster"
+                    gobuster -z -q dir -e -u "$IP" -w /usr/share/wordlists/dirbuster/directory-list-lowercase-2.3-medium.txt >> "${dir}"gobuster.out 2>&1 &
+                    ;;
+                8080)
+                    # Try enumerate Tomcat
+                    tomcat_version=$(curl -s http://"${IP}":8080/docs/ | grep 'Tomcat')
+                    if [ -n "$tomcat_version" ]; then
+                        printf "%b[+] Web service Tomcat detected. Running Tomcat enum tools%b\n" "${GREEN}" "${RESTORE}"
+    
+                        running_tool "gobuster"
+                        gobuster -z -q dir -e -u "$IP":8080 -w /usr/share/wordlists/dirbuster/directory-list-lowercase-2.3-medium.txt >> "${dir}"gobuster_tomcat.out 2>&1 &
+    
+                        hydra -L users.txt -P /usr/share/seclists/Passwords/darkweb2017-top1000.txt -f "${IP}" http-get /manager/html
+                    fi
+                    ;;
+                111)
+                    printf "%b[+] RPC service detected. Running RPC nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
+                    nmap -p 111 --script=nfs-ls,nfs-statfs,nfs-showmount "$IP" -oA rpc_nmap_scan >> rpc_tailable_nmap_scan 2>&1 &
+                    ;;
+                139|445)
+                    printf "%b[+] SMB detected. Running SMB enum tools%b\n" "${GREEN}" "${RESTORE}"
+                    running_tool "smbmap"
+                    smbmap -H "$IP" >> "${dir}"smbmap_anon.out 2>&1 &
+                    printf "${YELLOW}[!] Running: smbmap -H %s > %s 2>&1 &\n" "$IP" "${dir}smbmap_anon.out${RESTORE}" 
+    
+                    running_tool "rpcclient"
+                    rpcclient -U "" "$IP" >> "$dir"rpcclient_anon.out 2>&1 &
+                    printf "${YELLOW}[!] Running: rpcclient -U "" %s > %s 2>&1 &\n" "$IP" "${dir}rpcclient_anon.out${RESTORE}"
+    
+                    running_tool "nmblookup"
+                    nmblookup -A "$IP" >> "$dir"nmblookup.out 2>&1 &
+    
+                    running_tool "enum4linux"
+                    enum4linux -u '' -p '' >> "$dir"enum4linux_anon.out 2>&1 &
+                    ;;
+                *)
+                    printf "%b[+] All commonly-known ports successfully parsed.%b" "${GREEN}" "${RESTORE}"
+                    ;;
+                esac
+            done
         fi
-
-        # Further Enum
-        case "$ports" in
-            *80*|*443*) 
-                printf "%b[+] Web service detected. Running Web enum tools%b\n" "${GREEN}" "${RESTORE}"
-                running_tool "nikto"
-                nikto -host "$IP" > "${dir}"nikto.out 2>&1 &
-                
-                running_tool "gobuster"
-                gobuster -z -q dir -e -u "$IP" -w /usr/share/wordlists/dirbuster/directory-list-lowercase-2.3-medium.txt > "${dir}"gobuster.out 2>&1 &
-                ;;
-            *111*)
-                printf "%b[+] RPC service detected. Running RPC nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
-                nmap -p 111 --script=nfs-ls,nfs-statfs,nfs-showmount "$IP" -oA rpc_nmap_scan > rpc_tailable_nmap_scan 2>&1 &
-                ;;
-            *139*|*445*)
-                printf "%b[+] SMB detected. Running SMB enum tools%b\n" "${GREEN}" "${RESTORE}"
-                running_tool "smbmap"
-                smbmap -H "$IP" > "${dir}"smbmap_anon.out 2>&1 &
-                printf "${YELLOW}[!] Running: smbmap -H %s > %s 2>&1 &\n" "$IP" "${dir}smbmap_anon.out${RESTORE}" 
-
-                running_tool "rpcclient"
-                rpcclient -U "" "$IP" > "$dir"rpcclient_anon.out 2>&1 &
-                printf "${YELLOW}[!] Running: rpcclient -U "" %s > %s 2>&1 &\n" "$IP" "${dir}rpcclient_anon.out${RESTORE}"
-
-                running_tool "nmblookup"
-                nmblookup -A "$IP" > "$dir"nmblookup.out 2>&1 &
-
-                running_tool "enum4linux"
-                enum4linux -u '' -p '' > "$dir"enum4linux_anon.out 2>&1 &
-                ;;
-            *)
-                printf "All commonly-known ports parsed"
-                ;;
-        esac
-
     # Multi-target
     else
         # Loop through the targets and assign vars accordingly
@@ -170,7 +189,6 @@ main() {
             if [ "$sweep_result" -eq 1 ]; then 
                 printf "${RED}[-] No open ports were found in %s, aborting all TCP scans\n" "$target"
             else
-                #stealthy_scan "$target" "$target_number"
                 aggressive_scan "$target" "$target_number"
             fi
             # Nmap UDP scan
@@ -192,7 +210,7 @@ _  __ `/  / / /  __/  __ \_  __/  __  __ \  / / /_  __ `__ \
 / /_/ // /_/ // /_ / /_/ /  /___  _  / / / /_/ /_  / / / / /
 \__,_/ \__,_/ \__/ \____//_____/  /_/ /_/\__,_/ /_/ /_/ /_/ 
                     by 0x5ubt13                                                           
-'                                                
+'                                               
 
 # Check 1: Ensure there is a target
 if [ -n "$1" ]; then
