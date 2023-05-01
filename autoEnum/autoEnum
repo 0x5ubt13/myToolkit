@@ -55,7 +55,7 @@ answers_icmp() {
 # Quickly scan all TCP ports and save them to $ports
 ports_sweep() {
     printf "\n%b[+] Starting nmap SYN port discovery scan against %b'%s'%b, please bear with...\n" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"
-    ports="$(rustscan -a 10.129.150.224 --ulimit 5000 -g | cut -d ' ' -f 3 | sed 's/[^[:alnum:],\t]//g')"
+    ports="$(rustscan -a "$IP" --ulimit 5000 -g | cut -d ' ' -f 3 | sed 's/[^[:alnum:],\t]//g')"
     # Check there are ports in the var
     if [ -z "$ports" ]; then
         sweep_result=1
