@@ -54,8 +54,18 @@ answers_icmp() {
 # ---------- SCANS ----------
 # Quickly scan all TCP ports and save them to $ports
 ports_sweep() {
-    printf "\n%b[+] Starting nmap SYN port discovery scan against %b'%s'%b, please bear with...\n" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"
-    ports="$(rustscan -a "$IP" --ulimit 5000 -g | cut -d ' ' -f 3 | sed 's/[^[:alnum:],\t]//g')"
+    rustscan_check=$(find / rustscan 2>/dev/null | grep /bin/rustscan)
+    if [ -n "$rustscan_check" ]; then
+        # Rustscan ports sweep
+        printf "%b[+] Rustscan installed, using Rustscan%b" "{GREEN}" "${RESTORE}"
+        printf "\n%b[+] Starting Rustscan SYN port discovery scan against %b'%s'%b, please bear with...\n" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"
+        ports="$(rustscan -a "$IP" --ulimit 5000 -g | cut -d ' ' -f 3 | sed 's/[^[:alnum:],\t]//g')"
+    else
+        # Nmap ports sweep
+        printf "%b[-] Rustscan not installed, using nmap for port sweeping.%b" "${YELLOW}" "${RESTORE}"
+        printf "\n${YELLOW}[+] Starting nmap SYN port discovery scan against ${RESTORE}'%s'${YELLOW}...\n" "$1"
+        ports=$(nmap --min-rate=2000 -sS -p- -T5 "$ping" "$1" 2>/dev/null | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
+    fi
     # Check there are ports in the var
     if [ -z "$ports" ]; then
         sweep_result=1
@@ -63,15 +73,13 @@ ports_sweep() {
         sweep_result=0 # Needed to check later on, otherwise it throws an "illegal number" error
         echo "$ports" > "$dir"open_ports.txt
         printf "\n${GREEN}[+] Done! Open ports in ${RESTORE}'%s'${GREEN}: ${RESTORE}%s\n${GREEN}[+] Saved as ${RESTORE}%sopen_ports%s.txt${GREEN} in nmap-friendly format.${RESTORE}\n\n" "$1" "${ports}" "$dir" "$2"
-    fi
+    fi   
 }
 
 # Proceed with an aggressive scan
 aggressive_scan() {
     printf "${YELLOW}[+] Starting aggressive scan against ${RESTORE}'%s'\n" "$1"
-    
     printf "%b[!] Running 'nmap -sVC %s --script=vuln -oA ${dir}nmap -p%s %s%b'\n" "${YELLOW}" "${ping}" "${ports}" "${1}" "${RESTORE}"
-
     printf "%b[+] Saving output to %b${dir}nmap %bin all formats.%b\n\n" "${GREEN}" "${RESTORE}" "${GREEN}" "${RESTORE}"
     
     nmap "${1}" -vvv -sVC "$ping" --script=vuln -oA "${dir}nmap_scan" -p"$ports" > "${dir}"nmap_tailable_progress 2>&1 &
@@ -111,7 +119,8 @@ main() {
         
         # Abort tests if no ports were found open
         if [ "$sweep_result" -eq 1 ]; then 
-            printf "${RED}[-] No open ports were found in %s, aborting all TCP scans\n" "$IP"
+            printf "%b[-] No open ports were found in %s, aborting all scans\n%b" "${RED}" "$IP" "${RESTORE}"
+            exit 1
         else
             aggressive_scan "$IP"
 
