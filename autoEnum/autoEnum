@@ -12,9 +12,10 @@ START="$(date +%s)" # Timing the execution
 # Print usage and exit
 usage() {
     printf "\n%bUsage: %b%s [OPTIONS] <Single target's IP/Targets file>\n" "${GREEN}" "${RESTORE}" "$(basename "$0")"
-    printf "%b\t-h : ${RESTORE}Display this help and exit.\n" "${YELLOW}"
-    printf "%b\t-r : ${RESTORE}Specify a CIDR range to use tools for whole subnets.\n" "${YELLOW}"
-    printf "%b\t-d : ${RESTORE}Specify custom DNS servers. Default option: ${YELLOW}-n${RESTORE}.\n" "${YELLOW}"
+    printf "%b\t-h :%b Display this help and exit.\n" "${YELLOW}" "${RESTORE}"
+    printf "%b\t-r :%b Specify a CIDR range to use tools for whole subnets.\n" "${YELLOW}" "${RESTORE}"
+    printf "%b\t-t :%b Run port sweep with nmap and the flag --top-ports=<your input>\n" "${YELLOW}" "${RESTORE}"
+    printf "%b\t-d :%b Specify custom DNS servers. Default option: ${YELLOW}-n${RESTORE}.\n" "${YELLOW}" "${RESTORE}"
     printf "%b\nExamples: \n\t%s 192.168.142.93\n\t%s 10.129.121.60 ${YELLOW}-d${GREEN} <serv1[,serv2],...>\n\t%s 10.129.121.60 ${YELLOW}-r${GREEN} 10.129.121.0/24\n\t%s targets_file.txt ${YELLOW}-r${GREEN} 10.10.8.0/24" "${GREEN}" "$(basename "$0")" "$(basename "$0")" "$(basename "$0")" "$(basename "$0")"
     exit 1
 }
@@ -28,10 +29,11 @@ error_msg() {
 # Defaults:
 dnsServers="-n"
 
-while getopts ":h:r:A:d" flag; do
+while getopts ":h:r:t:A:d" flag; do
     case "${flag}" in
     h) usage;;
     r) cidr="${OPTARG}";;
+    t) top="${OPTARG}";;
     d) dnsServers="--dns-servers ${OPTARG}";;
     A) ;; # Placeholder for future options
     *) error_msg "Invalid options provided";;
@@ -54,18 +56,26 @@ answers_icmp() {
 # ---------- SCANS ----------
 # Quickly scan all TCP ports and save them to $ports
 ports_sweep() {
-    rustscan_check=$(find / rustscan 2>/dev/null | grep /bin/rustscan)
-    if [ -n "$rustscan_check" ]; then
-        # Rustscan ports sweep
-        printf "%b[+] Rustscan installed, using Rustscan%b" "{GREEN}" "${RESTORE}"
-        printf "\n%b[+] Starting Rustscan SYN port discovery scan against %b'%s'%b, please bear with...\n" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"
-        ports="$(rustscan -a "$IP" --ulimit 5000 -g | cut -d ' ' -f 3 | sed 's/[^[:alnum:],\t]//g')"
+    if [ -n "$top" ]; then
+        # Nmap ports sweep with --top-ports=<${top}>
+        printf "%b[+]%b -t%b flag detected. Running nmap port sweep with --top-ports=%s .%b\n" "${GREEN}" "${YELLOW}" "${GREEN}" "${top}" "${RESTORE}"
+        printf "%b[+] Starting nmap SYN port discovery scan against %b'%s'%b...\n" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"
+        ports=$(nmap --min-rate=2000 -sS -p- -T4 --top-ports="${top}" "$ping" "$1" 2>/dev/null | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
     else
-        # Nmap ports sweep
-        printf "%b[-] Rustscan not installed, using nmap for port sweeping.%b" "${YELLOW}" "${RESTORE}"
-        printf "\n${YELLOW}[+] Starting nmap SYN port discovery scan against ${RESTORE}'%s'${YELLOW}...\n" "$1"
-        ports=$(nmap --min-rate=2000 -sS -p- -T5 "$ping" "$1" 2>/dev/null | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
+        rustscan_check=$(find / rustscan 2>/dev/null | grep /bin/rustscan)
+        if [ -n "$rustscan_check" ]; then
+            # Rustscan ports sweep
+            printf "%b[+] Rustscan installed, using Rustscan%b" "${GREEN}" "${RESTORE}"
+            printf "\n%b[+] Starting Rustscan SYN port discovery scan against %b'%s'%b, please bear with...\n" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"
+            ports="$(rustscan -a "$IP" --ulimit 5000 -g | cut -d ' ' -f 3 | sed 's/[^[:alnum:],\t]//g')"
+        else
+            # Nmap ports sweep
+            printf "%b[-] Rustscan not installed, using nmap -p- as a default for port sweeping.%b" "${YELLOW}" "${RESTORE}"
+            printf "\n${YELLOW}[+] Starting nmap SYN port discovery scan against ${RESTORE}'%s'${YELLOW}...\n" "$1"
+            ports=$(nmap --min-rate=2000 -sS -p- -T5 "$ping" "$1" 2>/dev/null | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
+        fi
     fi
+
     # Check there are ports in the var
     if [ -z "$ports" ]; then
         sweep_result=1
@@ -78,7 +88,7 @@ ports_sweep() {
 
 # Proceed with an aggressive scan
 aggressive_scan() {
-    printf "${YELLOW}[+] Starting aggressive scan against ${RESTORE}'%s'\n" "$1"
+    printf "%b[+] Starting aggressive scan against %b'%s'\n" "${YELLOW}" "${RESTORE}" "$1"
     printf "%b[!] Running 'nmap -sVC %s --script=vuln -oA ${dir}nmap -p%s %s%b'\n" "${YELLOW}" "${ping}" "${ports}" "${1}" "${RESTORE}"
     printf "%b[+] Saving output to %b${dir}nmap %bin all formats.%b\n\n" "${GREEN}" "${RESTORE}" "${GREEN}" "${RESTORE}"
     
@@ -121,63 +131,63 @@ main() {
         if [ "$sweep_result" -eq 1 ]; then 
             printf "%b[-] No open ports were found in %s, aborting all scans\n%b" "${RED}" "$IP" "${RESTORE}"
             exit 1
-        else
-            aggressive_scan "$IP"
-
-            # Convert comma-separated string to an array of ports
-            IFS=',' read -ra PORTS_ARRAY <<< "$ports" ## TODO: convert Here-Strings to POSIX
-    
-            # Iterate over each port in the array
-            for port in "${PORTS_ARRAY[@]}"; do ## TODO: convert array to POSIX
-                # Use a case statement to perform different actions for each port
-                case $port in
-                80|443)
-                    # Common Web 
-                    printf "%b[+] Web service detected. Running Web enum tools%b\n" "${GREEN}" "${RESTORE}"
-                    running_tool "nikto"
-                    nikto -host "$IP" >> "${dir}"nikto.out 2>&1 &
-                    
-                    running_tool "gobuster"
-                    gobuster -z -q dir -e -u "$IP" -w /usr/share/wordlists/dirbuster/directory-list-lowercase-2.3-medium.txt >> "${dir}"gobuster.out 2>&1 &
-                    ;;
-                8080)
-                    # Try enumerate Tomcat
-                    tomcat_version=$(curl -s http://"${IP}":8080/docs/ | grep 'Tomcat')
-                    if [ -n "$tomcat_version" ]; then
-                        printf "%b[+] Web service Tomcat detected. Running Tomcat enum tools%b\n" "${GREEN}" "${RESTORE}"
-    
-                        running_tool "gobuster"
-                        gobuster -z -q dir -e -u "$IP":8080 -w /usr/share/wordlists/dirbuster/directory-list-lowercase-2.3-medium.txt >> "${dir}"gobuster_tomcat.out 2>&1 &
-    
-                        hydra -L users.txt -P /usr/share/seclists/Passwords/darkweb2017-top1000.txt -f "${IP}" http-get /manager/html
-                    fi
-                    ;;
-                111)
-                    printf "%b[+] RPC service detected. Running RPC nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
-                    nmap -p 111 --script=nfs-ls,nfs-statfs,nfs-showmount "$IP" -oA rpc_nmap_scan >> rpc_tailable_nmap_scan 2>&1 &
-                    ;;
-                139|445)
-                    printf "%b[+] SMB detected. Running SMB enum tools%b\n" "${GREEN}" "${RESTORE}"
-                    running_tool "smbmap"
-                    smbmap -H "$IP" >> "${dir}"smbmap_anon.out 2>&1 &
-                    printf "${YELLOW}[!] Running: smbmap -H %s > %s 2>&1 &\n" "$IP" "${dir}smbmap_anon.out${RESTORE}" 
-    
-                    running_tool "rpcclient"
-                    rpcclient -U "" "$IP" >> "$dir"rpcclient_anon.out 2>&1 &
-                    printf "${YELLOW}[!] Running: rpcclient -U "" %s > %s 2>&1 &\n" "$IP" "${dir}rpcclient_anon.out${RESTORE}"
-    
-                    running_tool "nmblookup"
-                    nmblookup -A "$IP" >> "$dir"nmblookup.out 2>&1 &
-    
-                    running_tool "enum4linux"
-                    enum4linux -u '' -p '' >> "$dir"enum4linux_anon.out 2>&1 &
-                    ;;
-                *)
-                    printf "%b[+] All commonly-known ports successfully parsed.%b" "${GREEN}" "${RESTORE}"
-                    ;;
-                esac
-            done
         fi
+        # If still alive, proceed
+        aggressive_scan "$IP"
+
+        # Convert comma-separated string to an array of ports
+        IFS=',' read -ra PORTS_ARRAY <<< "$ports" ## TODO: convert Here-Strings to POSIX
+
+        # Iterate over each port in the array
+        for port in "${PORTS_ARRAY[@]}"; do ## TODO: convert array to POSIX
+            # Use a case statement to perform different actions for each port
+            case $port in
+            80|443)
+                # Common Web 
+                printf "%b[+] Web service detected. Running Web enum tools%b\n" "${GREEN}" "${RESTORE}"
+                running_tool "nikto"
+                nikto -host "$IP" >> "${dir}"nikto.out 2>&1 &
+                
+                running_tool "gobuster"
+                gobuster -z -q dir -e -u "$IP" -w /usr/share/wordlists/dirbuster/directory-list-lowercase-2.3-medium.txt >> "${dir}"gobuster.out 2>&1 &
+                ;;
+            8080)
+                # Try enumerate Tomcat
+                tomcat_version=$(curl -s http://"${IP}":8080/docs/ | grep 'Tomcat')
+                if [ -n "$tomcat_version" ]; then
+                    printf "%b[+] Web service Tomcat detected. Running Tomcat enum tools%b\n" "${GREEN}" "${RESTORE}"
+
+                    running_tool "gobuster"
+                    gobuster -z -q dir -e -u "$IP":8080 -w /usr/share/wordlists/dirbuster/directory-list-lowercase-2.3-medium.txt >> "${dir}"gobuster_tomcat.out 2>&1 &
+
+                    hydra -L users.txt -P /usr/share/seclists/Passwords/darkweb2017-top1000.txt -f "${IP}" http-get /manager/html
+                fi
+                ;;
+            111)
+                printf "%b[+] RPC service detected. Running RPC nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
+                nmap -p 111 --script=nfs-ls,nfs-statfs,nfs-showmount "$IP" -oA rpc_nmap_scan >> rpc_tailable_nmap_scan 2>&1 &
+                ;;
+            139|445)
+                printf "%b[+] SMB detected. Running SMB enum tools%b\n" "${GREEN}" "${RESTORE}"
+                running_tool "smbmap"
+                smbmap -H "$IP" >> "${dir}"smbmap_anon.out 2>&1 &
+                printf "${YELLOW}[!] Running: smbmap -H %s > %s 2>&1 &\n" "$IP" "${dir}smbmap_anon.out${RESTORE}" 
+
+                running_tool "rpcclient"
+                rpcclient -U "" "$IP" >> "$dir"rpcclient_anon.out 2>&1 &
+                printf "${YELLOW}[!] Running: rpcclient -U "" %s > %s 2>&1 &\n" "$IP" "${dir}rpcclient_anon.out${RESTORE}"
+
+                running_tool "nmblookup"
+                nmblookup -A "$IP" >> "$dir"nmblookup.out 2>&1 &
+
+                running_tool "enum4linux"
+                enum4linux -u '' -p '' >> "$dir"enum4linux_anon.out 2>&1 &
+                ;;
+            *)
+                printf "%b[+] All commonly-known ports successfully parsed.%b" "${GREEN}" "${RESTORE}"
+                ;;
+            esac
+        done
     # Multi-target
     else
         # Loop through the targets and assign vars accordingly
