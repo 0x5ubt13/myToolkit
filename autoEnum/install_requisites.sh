@@ -7,6 +7,12 @@ GREEN="\033[32m"
 YELLOW="\033[33m"
 
 # ---------- Installation ----------
+# Making sure we're not SU
+if [ "$EUID" -eq 0 ]; then 
+    printf "%b[-]%b Please don't run this script as root 💀, sudo will be only used when scritly necessary." "${RED}" "${RESTORE}"
+    exit 1
+fi
+
 # Detecting debian-based distro
 compatible_distro=$(cat /etc/*-release | grep -i "debian")
 if [ -n "$compatible_distro" ]; then
@@ -39,11 +45,12 @@ if [ -n "$compatible_distro" ]; then
     fi
 
     # Symlink autoEnum
-    ln ./autoenum /usr/bin/autoenum
+    chmod +x ./autoEnum
+    ln ./autoEnum /usr/bin/autoenum
 
     # Launch autoEnum help
     autoenum
 
 else
-    printf "%b[-] Debian-like distro NOT detected. Aborting...%b\n%b[!] To use this script, simply make sure you have installed Seclists and Rustscan%b" "${RED}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
+    printf "%b[-] Debian-like distro NOT detected. Aborting...%b\n%b[!] To run autoEnum fast, simply make sure you have installed Seclists and Rustscan%b" "${RED}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
 fi    
