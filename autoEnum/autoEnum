@@ -143,14 +143,25 @@ ports_iterator() {
   for port in "${PORTS_ARRAY[@]}"; do ## TODO: convert array to POSIX
     # Use a case statement to perform different actions for each port
     case $port in
-    80|443)
-      # Common Web 
-      printf "%b[+] Web service detected. Running Web enum tools%b\n" "${GREEN}" "${RESTORE}"
+    80)
+      # Common Web without TLS 
+      printf "%b[+] Running Web enum tools in port 80%b\n" "${GREEN}" "${RESTORE}"
+
       running_tool "nikto"
       nikto -host "$1" >> "${dir}"nikto.out 2>&1 &
-      
+
       running_tool "gobuster"
-      gobuster -z -q dir -e -u "$1" -w /usr/share/wordlists/dirbuster/directory-list-lowercase-2.3-medium.txt >> "${dir}"gobuster.out 2>&1 &
+      gobuster -z -t 25 dir -e -u http://"$1" -w /usr/share/wordlists/dirbuster/directory-list-lowercase-2.3-medium.txt >> "${dir}"gobuster_80.out 2>&1 &
+      ;;
+    443)
+      # Common Web 
+      printf "%b[+] Running Web enum tools in port 443%b\n" "${GREEN}" "${RESTORE}"
+
+      running_tool "nikto"
+      nikto -host "$1" >> "${dir}"nikto.out 2>&1 &
+
+      running_tool "gobuster"
+      gobuster -z -t 25 dir -e -u https://"$1" -w /usr/share/wordlists/dirbuster/directory-list-lowercase-2.3-medium.txt >> "${dir}"gobuster_443.out 2>&1 &
       ;;
     8080)
       # Try enumerate Tomcat
@@ -168,16 +179,16 @@ ports_iterator() {
     111)
       printf "%b[+] RPC service detected. Running RPC nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
       nmap -p 111 --script=nfs-ls,nfs-statfs,nfs-showmount "$1" -oA rpc_nmap_scan >> rpc_tailable_nmap_scan 2>&1 &
-      ;;
-    139|445)
-      printf "%b[+] SMB detected. Running SMB enum tools%b\n" "${GREEN}" "${RESTORE}"
-      running_tool "smbmap"
-      smbmap -H "$1" >> "${dir}"smbmap_anon.out 2>&1 &
-      printf "${YELLOW}[!] Running: smbmap -H %s > %s 2>&1 &\n" "$1" "${dir}smbmap_anon.out${RESTORE}" 
-  
+      
       running_tool "rpcclient"
       rpcclient -U "" "$1" >> "$dir"rpcclient_anon.out 2>&1 &
       printf "${YELLOW}[!] Running: rpcclient -U "" %s > %s 2>&1 &\n" "$1" "${dir}rpcclient_anon.out${RESTORE}"
+      ;;
+    139|445)
+      printf "%b[+] NetBIOS/SMB detected. Running SMB enum tools%b\n" "${GREEN}" "${RESTORE}"
+      running_tool "smbmap"
+      smbmap -H "$1" >> "${dir}"smbmap_anon.out 2>&1 &
+      printf "${YELLOW}[!] Running: smbmap -H %s > %s 2>&1 &\n" "$1" "${dir}smbmap_anon.out${RESTORE}" 
   
       running_tool "nmblookup"
       nmblookup -A "$1" >> "$dir"nmblookup.out 2>&1 &
@@ -261,14 +272,14 @@ main() {
 # ---------- Script checks, ensuring everything is ready to run ----------
 
 # Check 0: Launch fancy banner!
-echo '
+printf "
               _____      __________                         
 ______ ____  ___  /_________  ____/__________  ________ ___ 
-_  __ `/  / / /  __/  __ \_  __/  __  __ \  / / /_  __ `__ \
+_  __ \`/  / / /  __/  __ \\_  __/  __  __ \\  / / /_  __ \`__ \\
 / /_/ // /_/ // /_ / /_/ /  /___  _  / / / /_/ /_  / / / / /
-\__,_/ \__,_/ \__/ \____//_____/  /_/ /_/\__,_/ /_/ /_/ /_/ 
+\__,_/ \\__,_/ \\__/ \\____//_____/  /_/ /_/\\__,_/ /_/ /_/ /_/ 
                     by 0x5ubt13                             
-'                                               
+"                                                
 
 # Check 1: help flag passed?
 if [[ "$do_help" ]]; then
@@ -304,6 +315,12 @@ fi
 
 if [[ ! -d "$dir" ]]; then
   mkdir "$dir"
+fi
+
+# Check 5: locate exists in the system
+updatedb_check=$(which updatedb)
+if [ -z "$updatedb_check" ]; then
+  error_msg "AutoEnum needs \"locate\" to be installed. Please see/run \"install_requisites.sh\""
 fi
 
 # ---------- Preliminary checks completed. Calling main function ----------
