@@ -67,9 +67,14 @@ chmod +x mytoolkit/autoEnum/autoEnum
 ln mytoolkit/autoEnum/autoEnum /usr/bin/autoenum
 ~~~
 
-## TODOs
-- [] Finish the core script
-- [] Test thoroughly
-- [] Containerise
-- [] Convert to POSIX compliant
-- [] Enumerate the planet
+## To Do
+
+- [x] Implement optional arguments
+- [x] Experimenting with nice colors
+- [x] Implementing the use of `printf` instead of `echo`
+- [x] Adapt to Google's shell scripting style guide
+- [ ] Finish the core script
+- [ ] Test thoroughly
+- [ ] Containerise
+- [ ] Convert to POSIX compliant
+- [ ] Enumerate the planet
