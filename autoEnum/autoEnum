@@ -113,6 +113,17 @@ running_tool() {
   printf "%b[!] Starting %s and sending it to the background.%b\n" "${YELLOW}" "$1" "${RESTORE}"
 }
 
+wp_enumeration() {
+  # Enumeration for WordPress. 
+  # Pass the port number to the function
+  wp_version=$(curl -s -X GET http://"${IP}":"$1" | grep 'wp-content')
+  if [ -n "$wp_version" ]; then
+    printf "%b[+]%b WordPress%b found." "${GREEN}" "${YELLOW}" "${RESTORE}" 
+    running_tool "WPScan"
+    wpscan --url http://"${IP}":"$1" -e p,u >> wpscan_output_port_"$1".txt 2>&1 &
+  fi
+}
+
 cidr_enumeration() {
   if [ -n "$cidr" ]; then
     # Create dir for output
@@ -150,8 +161,10 @@ ports_iterator() {
       running_tool "nikto"
       nikto -host "$1" >> "${dir}"nikto.out 2>&1 &
 
-      running_tool "gobuster"
-      gobuster -z -t 25 dir -e -u http://"$1" -w /usr/share/wordlists/dirbuster/directory-list-lowercase-2.3-medium.txt >> "${dir}"gobuster_80.out 2>&1 &
+      running_tool "ffuf"
+      ffuf -u http://"$1" -w /usr/share/wordlists/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt:FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v >> "${dir}"ffuf_80.out 2>&1 &
+      
+      wp_enumeration "80"
       ;;
     443)
       # Common Web 
@@ -161,11 +174,15 @@ ports_iterator() {
       nikto -host "$1" >> "${dir}"nikto.out 2>&1 &
 
       running_tool "gobuster"
-      gobuster -z -t 25 dir -e -u https://"$1" -w /usr/share/wordlists/dirbuster/directory-list-lowercase-2.3-medium.txt >> "${dir}"gobuster_443.out 2>&1 &
+      ffuf -u https://"$1" -w /usr/share/wordlists/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt:FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v >> "${dir}"ffuf_443.out 2>&1 &
+      
+      wp_enumeration "443"
       ;;
     8080)
-      # Try enumerate Tomcat
-      tomcat_version=$(curl -s http://"${IP}":8080/docs/ | grep 'Tomcat')
+      # Try enumerate Service
+      wp_enumeration "8080"
+
+      tomcat_version=$(curl -s -X GET http://"${IP}":8080/docs/ | grep 'Tomcat')
       if [ -n "$tomcat_version" ]; then
         printf "%b[+] Web service Tomcat detected. Running Tomcat enum tools%b\n" "${GREEN}" "${RESTORE}"
   
