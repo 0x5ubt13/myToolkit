@@ -9,12 +9,12 @@ START="$(date +%s)" # Timing the execution
 
 # ---------- Optional parameters ----------
 # Defaults:
-dnsServers="-n"
-do_help=false
+dnsServers=""
+do_help=""
 
-while getopts "hrtd" flag; do
+while getopts "hr:t:d:" flag; do
   case "${flag}" in
-    h) do_help=true;;
+    h) do_help="yes";;
     r) cidr="${OPTARG}";;
     t) top="${OPTARG}";;
     d) dnsServers="--dns-servers ${OPTARG}";;
@@ -38,7 +38,7 @@ usage() {
 
 # Print red error messages and call usage
 error_msg() {
-  printf "%b[-] Error: $1 %s%b" "${RED}" "{$RESTORE}" 1>&2; usage; 
+  printf "%b[-] Error:%b %s\n" "${RED}" "$1" "${RESTORE}" 1>&2; usage; 
 }
 
 # Test whether the host is pingable and set -Pn accordingly
@@ -69,13 +69,14 @@ ports_sweep() {
         ports=$(nmap --min-rate=2000 "$dnsServers" -sS -p- -T4 "$ping" "$1" 2>/dev/null | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
     fi
   else
+    dnsServers="-n"
     if [ -n "$top" ]; then
       # Nmap ports sweep with --top-ports=<${top}>
       printf "%b[+]%b -t%b flag detected. Running nmap port sweep with --top-ports=%s .%b\n" "${GREEN}" "${YELLOW}" "${GREEN}" "${top}" "${RESTORE}"
       printf "%b[+] Starting nmap SYN port discovery scan against %b'%s'%b...\n" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"
       ports=$(nmap --min-rate=2000 "$dnsServers" -sS -p- -T4 --top-ports="${top}" "$ping" "$1" 2>/dev/null | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
     else
-      rustscan_check=$(find / rustscan 2>/dev/null | grep /bin/rustscan)
+      rustscan_check=$(locate "/bin/rustscan" -l 1)
       if [ -n "$rustscan_check" ]; then
         # Rustscan ports sweep
         printf "%b[+] Rustscan installed, using Rustscan%b" "${GREEN}" "${RESTORE}"
@@ -162,7 +163,7 @@ ports_iterator() {
       nikto -host "$1" >> "${dir}"nikto.out 2>&1 &
 
       running_tool "ffuf"
-      ffuf -u http://"$1" -w /usr/share/wordlists/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt:FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v >> "${dir}"ffuf_80.out 2>&1 &
+      ffuf -u http://"$1" -w "$(locate directory-list-2.3-medium.txt -l 1)":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v >> "${dir}"ffuf_80.out 2>&1 &
       
       wp_enumeration "80"
       ;;
@@ -295,11 +296,11 @@ ______ ____  ___  /_________  ____/__________  ________ ___
 _  __ \`/  / / /  __/  __ \\_  __/  __  __ \\  / / /_  __ \`__ \\
 / /_/ // /_/ // /_ / /_/ /  /___  _  / / / /_/ /_  / / / / /
 \__,_/ \\__,_/ \\__/ \\____//_____/  /_/ /_/\\__,_/ /_/ /_/ /_/ 
-                    by 0x5ubt13                             
+                    by 0x5ubt13                               \n                                            
 "                                                
 
 # Check 1: help flag passed?
-if [[ "$do_help" ]]; then
+if [ -n "$do_help" ]; then
     usage
 fi
 
@@ -325,9 +326,9 @@ fi
 # Check 4: Ensure base output directory is correctly set and exists
 ## TODO: create option to set custom directory if launched autonomously outside Docker
 if test "$(pwd)" = "/"; then
-  dir="/autoEnum/"
+  dir="/autoEnum_output/"
 else
-  dir="$(pwd)/autoEnum/"
+  dir="$(pwd)/autoEnum_output/"
 fi
 
 if [[ ! -d "$dir" ]]; then
@@ -337,7 +338,7 @@ fi
 # Check 5: locate exists in the system
 updatedb_check=$(which updatedb)
 if [ -z "$updatedb_check" ]; then
-  error_msg "AutoEnum needs \"locate\" to be installed. Please see/run \"install_requisites.sh\""
+  error_msg "AutoEnum needs \"locate\" to be installed. Please see or run \"install_requisites.sh\""
 fi
 
 # ---------- Preliminary checks completed. Calling main function ----------
