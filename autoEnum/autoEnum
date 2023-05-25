@@ -107,7 +107,7 @@ aggressive_scan() {
   printf "%b[!] Running 'nmap -sVC %s --script=vuln -oA ${dir}nmap -p%s %s &. Use 'cat ${dir}nmap_tailable_progress' to see the progress%b'\n" "${YELLOW}" "${ping}" "${ports}" "${1}" "${RESTORE}"
   printf "%b[+] Saving output to %b${dir}nmap %bin all formats.%b\n\n" "${GREEN}" "${RESTORE}" "${GREEN}" "${RESTORE}"
   
-  nmap "${1}" -vvv -sVC "$ping" --script=vuln -oA "${dir}nmap_scan" -p"$ports" > "${dir}"nmap_tailable_progress 2>&1 &
+  nmap "${1}" -vvv -sVC "$ping" --script=vuln -oA "${dir}nmap_scan" -p"$ports" > "${dir}"full_nmap_tailable_progress 2>&1 &
 }
 
 running_tool() {
@@ -141,7 +141,7 @@ cidr_enumeration() {
     responder-RunFinger -i "$cidr" >> "${cidr_dir}"RunFinger.out 2>&1 &
     
     running_tool "onesixtyone"
-    onesixtyone -c /usr/share/legion/wordlists/snmp-default.txt "$cidr" -o onesixtyone.out -w 100 >> "${cidr_dir}"onesixtyone.tailable.out 2>&1 &
+    onesixtyone -c /usr/share/legion/wordlists/snmp-default.txt "$cidr" -o onesixtyone.out -w 100 >> "${cidr_dir}"onesixtyone_tailable.out 2>&1 &
   else
     printf "%b[!] CIDR range not detected. Remember you can also pass a range in CIDR notation to use enum tools that scan a wide range with %b-r <IP address>/<network mask>%b\n" "${YELLOW}" "${GREEN}" "${RESTORE}" 
   fi
@@ -155,6 +155,13 @@ ports_iterator() {
   for port in "${PORTS_ARRAY[@]}"; do ## TODO: convert array to POSIX
     # Use a case statement to perform different actions for each port
     case $port in
+    25|465|587)
+      # SMTP enumeration. Just run once.
+      if [ ! -f "${dir}smtp_tailable_nmap_scan.nmap" ]; then
+        printf "%b[+] Running SMTP enum tools in port %s%b\n" "${GREEN}" "${port}" "${RESTORE}" 
+        nmap -p"$port" --script=smtp-commands,smtp-enum-users,smtp-open-relay "$1" -v -oA SMTP-enum >> "${dir}"smtp_tailable_nmap_scan.out 2>&1 &
+      fi
+      ;;
     80)
       # Common Web without TLS 
       printf "%b[+] Running Web enum tools in port 80%b\n" "${GREEN}" "${RESTORE}"
@@ -172,10 +179,10 @@ ports_iterator() {
       printf "%b[+] Running Web enum tools in port 443%b\n" "${GREEN}" "${RESTORE}"
 
       running_tool "nikto"
-      nikto -host "$1" >> "${dir}"nikto.out 2>&1 &
+      nikto -host "$1" >> "${dir}"nikto_tailable.out 2>&1 &
 
       running_tool "gobuster"
-      ffuf -u https://"$1" -w /usr/share/wordlists/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt:FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v >> "${dir}"ffuf_443.out 2>&1 &
+      ffuf -u https://"$1" -w /usr/share/wordlists/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt:FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v >> "${dir}"ffuf_443_tailable.out 2>&1 &
       
       wp_enumeration "443"
       ;;
@@ -191,7 +198,7 @@ ports_iterator() {
         gobuster -z -q dir -e -u "$1":8080 -w /usr/share/wordlists/dirbuster/directory-list-lowercase-2.3-medium.txt >> "${dir}"gobuster_tomcat.out 2>&1 &
         
         running_tool "hydra"
-        hydra -L users.txt -P "$(find / -name darkweb2017-top1000.txt -type f 2>/dev/null | head -n 1)" -f "${IP}" http-get /manager/html
+        hydra -L users.txt -P "$(locate darkweb2017-top1000.txt -l 1)" -f "$1" http-get /manager/html >> "${dir}"hydra_tailable.out 2>&1 &
       fi
       ;;
     111)
@@ -200,13 +207,11 @@ ports_iterator() {
       
       running_tool "rpcclient"
       rpcclient -U "" "$1" >> "$dir"rpcclient_anon.out 2>&1 &
-      printf "${YELLOW}[!] Running: rpcclient -U "" %s > %s 2>&1 &\n" "$1" "${dir}rpcclient_anon.out${RESTORE}"
       ;;
     139|445)
       printf "%b[+] NetBIOS/SMB detected. Running SMB enum tools%b\n" "${GREEN}" "${RESTORE}"
       running_tool "smbmap"
-      smbmap -H "$1" >> "${dir}"smbmap_anon.out 2>&1 &
-      printf "${YELLOW}[!] Running: smbmap -H %s > %s 2>&1 &\n" "$1" "${dir}smbmap_anon.out${RESTORE}" 
+      smbmap -H "$1" >> "${dir}"smbmap_anon.out 2>&1 & 
   
       running_tool "nmblookup"
       nmblookup -A "$1" >> "$dir"nmblookup.out 2>&1 &
@@ -215,7 +220,7 @@ ports_iterator() {
       enum4linux -u '' -p '' "$1" >> "$dir"enum4linux_anon.out 2>&1 &
       ;;
     *)
-      printf "%b[+] All commonly-known ports successfully parsed.%b" "${GREEN}" "${RESTORE}"
+      printf "%b[+] Done! All well-known ports included in the script successfully parsed for %b%s%b. Enjoy!%b" "${GREEN}" "${RESTORE}" "${1}" "${GREEN}" "${RESTORE}"
       ;;
     esac
   done
