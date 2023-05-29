@@ -114,14 +114,20 @@ running_tool() {
   printf "%b[!] Starting %s and sending it to the background.%b\n" "${YELLOW}" "$1" "${RESTORE}"
 }
 
+finished_tool() {
+  # First arg tool name, second arg IP address, third arg directory
+  printf "%b[+] Done! %b%s%b for %b%s%b finished working on the background: cat %s\n%b" "${GREEN}" "${YELLOW}" "$1" "${GREEN}" "${RESTORE}" "$2" "${GREEN}" "$3" "${RESTORE}"
+}
+
 wp_enumeration() {
   # Enumeration for WordPress. 
-  # Pass the port number to the function
+  # Pass the port number and directory to the function
+  # First arg IP, second arg Port, third arg dir
   wp_version=$(curl -s -X GET http://"${IP}":"$1" | grep 'wp-content')
   if [ -n "$wp_version" ]; then
-    printf "%b[+]%b WordPress%b found." "${GREEN}" "${YELLOW}" "${RESTORE}" 
+    printf "%b[+]%b WordPress%b found.\n" "${GREEN}" "${YELLOW}" "${RESTORE}" 
     running_tool "WPScan"
-    wpscan --url http://"${IP}":"$1" -e p,u >> wpscan_output_port_"$1".txt 2>&1 &
+    wpscan --url http://"$1":"$2" -e p,u >> "${3}"wpscan_port_"${2}".out 2>&1 && finished_tool "WPScan" "$@" "${3}wpscan.out" & 
   fi
 }
 
@@ -132,7 +138,7 @@ cidr_enumeration() {
     mkdir "${cidr_dir}"
     
     # Run range tools
-    printf "%b[+]%b -c%b flag detected. Proceeding to scan CIDR range with dedicated range tools.%b" "${GREEN}" "${YELLOW}" "${GREEN}" "${RESTORE}"
+    printf "%b[+]%b -c%b flag detected. Proceeding to scan CIDR range with dedicated range tools.\n%b" "${GREEN}" "${YELLOW}" "${GREEN}" "${RESTORE}"
     
     running_tool "nbtscan-unixwiz" 
     nbtscan-unixwiz -f "$cidr" >> "${cidr_dir}"nbtscan-unixwiz.out 2>&1 &
@@ -159,20 +165,20 @@ ports_iterator() {
       # SMTP enumeration. Just run once.
       if [ ! -f "${dir}smtp_tailable_nmap_scan.nmap" ]; then
         printf "%b[+] Running SMTP enum tools in port %s%b\n" "${GREEN}" "${port}" "${RESTORE}" 
-        nmap -p"$port" --script=smtp-commands,smtp-enum-users,smtp-open-relay "$1" -v -oA SMTP-enum >> "${dir}"smtp_tailable_nmap_scan.out 2>&1 &
+        nmap -p"$port" --script=smtp-commands,smtp-enum-users,smtp-open-relay "$1" -v -oA SMTP-enum >> "${dir}"smtp_tailable_nmap_scan.out 2>&1 && finished_tool "NBLookup" "$@" "${dir}SMTP-enum.nmap" &
       fi
       ;;
     80)
       # Common Web without TLS 
       printf "%b[+] Running Web enum tools in port 80%b\n" "${GREEN}" "${RESTORE}"
 
-      running_tool "nikto"
-      nikto -host "$1" >> "${dir}"nikto.out 2>&1 &
+      running_tool "Nikto"
+      nikto -host "$1" >> "${dir}"nikto.out 2>&1 && finished_tool "Nikto" "$@" "${dir}nikto.out" &
 
       running_tool "ffuf"
-      ffuf -u http://"$1" -w "$(locate directory-list-2.3-medium.txt -l 1)":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v >> "${dir}"ffuf_80.out 2>&1 &
+      ffuf -u http://"$1"/FUZZ -w "$(locate directory-list-2.3-medium.txt -l 1)":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v >> "${dir}"ffuf_80_tailable.out 2>&1 && finished_tool "ffuf" "$@" "${dir}ffuf_80.out" &
       
-      wp_enumeration "80"
+      wp_enumeration "$1" "80" "${dir}"
       ;;
     443)
       # Common Web 
@@ -181,14 +187,14 @@ ports_iterator() {
       running_tool "nikto"
       nikto -host "$1" >> "${dir}"nikto_tailable.out 2>&1 &
 
-      running_tool "gobuster"
-      ffuf -u https://"$1" -w /usr/share/wordlists/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt:FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v >> "${dir}"ffuf_443_tailable.out 2>&1 &
+      running_tool "ffuf"
+      ffuf -u https://"$1"/FUZZ -w "$(locate directory-list-2.3-medium.txt -l 1)":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v >> "${dir}"ffuf_443_tailable.out 2>&1 && finished_tool "ffuf" "$@" "${dir}ffuf_443_tailable.out" &
       
-      wp_enumeration "443"
+      wp_enumeration "$1" "443" "${dir}"
       ;;
-    8080)
-      # Try enumerate Service
-      wp_enumeration "8080"
+    8080) 
+      # Try enumerate Service 
+      wp_enumeration "$1" "8080" "${dir}" 
 
       tomcat_version=$(curl -s -X GET http://"${IP}":8080/docs/ | grep 'Tomcat')
       if [ -n "$tomcat_version" ]; then
@@ -209,21 +215,25 @@ ports_iterator() {
       rpcclient -U "" "$1" >> "$dir"rpcclient_anon.out 2>&1 &
       ;;
     139|445)
-      printf "%b[+] NetBIOS/SMB detected. Running SMB enum tools%b\n" "${GREEN}" "${RESTORE}"
-      running_tool "smbmap"
-      smbmap -H "$1" >> "${dir}"smbmap_anon.out 2>&1 & 
+      # Run only once
+      if [ ! -f "${dir}"smbmap_anon.out ]; then
+        printf "%b[+] NetBIOS/SMB detected. Running SMB enum tools%b\n" "${GREEN}" "${RESTORE}"
+        running_tool "SMBMap"
+        smbmap -H "$1" >> "${dir}"smbmap_anon.out 2>&1 && finished_tool "SMBMap" "$@" "${dir}smbmap_anon.out" &
   
-      running_tool "nmblookup"
-      nmblookup -A "$1" >> "$dir"nmblookup.out 2>&1 &
-  
-      running_tool "enum4linux"
-      enum4linux -u '' -p '' "$1" >> "$dir"enum4linux_anon.out 2>&1 &
+        running_tool "NBLookup"
+        nmblookup -A "$1" >> "$dir"nmblookup.out 2>&1 && finished_tool "NBLookup" "$@" "${dir}nmblookup.out" &
+    
+        running_tool "enum4linux"
+        enum4linux -u '' -p '' "$1" >> "$dir"enum4linux_anon.out 2>&1 && finished_tool "enum4linux" "$@" "${dir}enum4linux_anon.out" &
+      fi
       ;;
     *)
-      printf "%b[+] Done! All well-known ports included in the script successfully parsed for %b%s%b. Enjoy!%b" "${GREEN}" "${RESTORE}" "${1}" "${GREEN}" "${RESTORE}"
+      printf "%b[-] %bFunctionality to enumerate port %b%s%b has not been implemented yet.\n" "${RED}" "${RESTORE}" "${YELLOW}" "$port" "${RESTORE}"
       ;;
     esac
   done
+  printf "%b[+] Done! All well-known ports included in the script successfully parsed for %b%s%b. Enjoy!\n%b" "${GREEN}" "${RESTORE}" "${1}" "${GREEN}" "${RESTORE}"
 }
 
 # Let the fun begin! 
