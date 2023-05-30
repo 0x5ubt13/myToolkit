@@ -54,8 +54,10 @@ answers_icmp() {
 }
 
 # ---------- SCANS ----------
+
 # Quickly scan all TCP ports and save them to $ports
 ports_sweep() {
+  # First arg target IP, second arg dir
   if [ -n "$dnsServers" ]; then
     # Nmap ports sweep with --dns-servers
     printf "%b[+]%b -d%b flag detected. Running nmap port sweep with custom DNS servers: %s .%b\n" "${GREEN}" "${YELLOW}" "${GREEN}" "${dnsServers}" "${RESTORE}"
@@ -95,19 +97,22 @@ ports_sweep() {
   if [ -z "$ports" ]; then
     sweep_result=1
   else
-    sweep_result=0 # Needed to check later on, otherwise it throws an "illegal number" error
-    echo "$ports" > "$dir"open_ports.txt
-    printf "\n%b[+] Done! Open ports in %b'%s'%b: %b%s\n%b[+] Saved as %b%sopen_ports%s.txt%b in nmap-friendly format.%b\n\n" "${GREEN}" "${RESTORE}" "$1" "${GREEN}" "${RESTORE}" "${ports}" "${GREEN}" "${RESTORE}" "$dir" "${GREEN}" "$2" "${RESTORE}"
+    sweep_result=0 # Needed to check later on to avoid throwing an "illegal number" error
+    echo "$ports" > "${2}"open_ports.txt
+    printf "\n%b[+] Done! Open ports in %b'%s'%b: %b%s\n%b[+] Saved as %b%sopen_ports%s.txt%b in nmap-friendly format.%b\n" "${GREEN}" "${RESTORE}" "$1" "${GREEN}" "${RESTORE}" "${ports}" "${GREEN}" "${RESTORE}" "${2}" "${GREEN}" "$2" "${RESTORE}"
   fi   
 }
 
 # Proceed with an aggressive scan
 aggressive_scan() {
+  # First arg IP, second arg directory
   printf "%b[+] Starting aggressive scan against %b'%s'\n" "${YELLOW}" "${RESTORE}" "$1"
-  printf "%b[!] Running 'nmap -sVC %s --script=vuln -oA ${dir}nmap -p%s %s &. Use 'cat ${dir}nmap_tailable_progress' to see the progress%b'\n" "${YELLOW}" "${ping}" "${ports}" "${1}" "${RESTORE}"
-  printf "%b[+] Saving output to %b${dir}nmap %bin all formats.%b\n\n" "${GREEN}" "${RESTORE}" "${GREEN}" "${RESTORE}"
+  printf "%b[!] Running 'nmap -sVC %s --script=vuln -oA ${2}nmap -p%s %s &. Use 'cat %snmap_tailable_progress' to see the progress%b'\n" "${YELLOW}" "${ping}" "${ports}" "${1}" "${2}" "${RESTORE}"
+  printf "%b[+] Saving output to %b${2}nmap %bin all formats.%b\n\n" "${GREEN}" "${RESTORE}" "${GREEN}" "${RESTORE}"
   
-  nmap "${1}" -vvv -sVC "$ping" --script=vuln -oA "${dir}nmap_scan" -p"$ports" > "${dir}"full_nmap_tailable_progress 2>&1 &
+  nmap "${1}" -vvv -sVC "$ping" --script=vuln -oA "${2}nmap_scan" -p"$ports" > "${dir}"full_nmap_tailable_progress 2>&1 && \
+    xsltproc "${2}nmap_scan.xml" && \
+    finished_tool "Main aggressive nmap scan for IP ${1}" "$@" "${2}nmap_scan.nmap" &
 }
 
 running_tool() {
@@ -120,9 +125,7 @@ finished_tool() {
 }
 
 wp_enumeration() {
-  # Enumeration for WordPress. 
-  # Pass the port number and directory to the function
-  # First arg IP, second arg Port, third arg dir
+  # Enumeration for WordPress. First arg IP, second arg Port, third arg dir
   wp_version=$(curl -s -X GET http://"${IP}":"$1" | grep 'wp-content')
   if [ -n "$wp_version" ]; then
     printf "%b[+]%b WordPress%b found.\n" "${GREEN}" "${YELLOW}" "${RESTORE}" 
@@ -131,52 +134,63 @@ wp_enumeration() {
   fi
 }
 
+# Enumerate a whole CIDR range using specific range tools
 cidr_enumeration() {
+  # First arg target CIDR, second arg dir
   if [ -n "$cidr" ]; then
     # Create dir for output
-    cidr_dir="$dir${cidr}_range_enum/"
+    cidr_dir="${2}${cidr}_range_enum/"
     mkdir "${cidr_dir}"
     
     # Run range tools
-    printf "%b[+]%b -c%b flag detected. Proceeding to scan CIDR range with dedicated range tools.\n%b" "${GREEN}" "${YELLOW}" "${GREEN}" "${RESTORE}"
+    printf "%b[+]%b -c%b flag detected. Proceeding to scan CIDR range with dedicated range enumeration tools.\n%b" "${GREEN}" "${YELLOW}" "${GREEN}" "${RESTORE}"
     
     running_tool "nbtscan-unixwiz" 
-    nbtscan-unixwiz -f "$cidr" >> "${cidr_dir}"nbtscan-unixwiz.out 2>&1 &
+    nbtscan-unixwiz -f "$cidr" >> "${cidr_dir}"nbtscan-unixwiz.out 2>&1 && finished_tool "nbtscan-unixwiz" "$cidr" "${cidr_dir}nbtscan-unixwiz.out" &
     
-    running_tool "responder-RunFinger"
-    responder-RunFinger -i "$cidr" >> "${cidr_dir}"RunFinger.out 2>&1 &
+    running_tool "Responder-RunFinger"
+    responder-RunFinger -i "$cidr" >> "${cidr_dir}"runfinger.out 2>&1 && finished_tool "responder-RunFinger" "$cidr" "${cidr_dir}runfinger.out" &
     
     running_tool "onesixtyone"
-    onesixtyone -c /usr/share/legion/wordlists/snmp-default.txt "$cidr" -o onesixtyone.out -w 100 >> "${cidr_dir}"onesixtyone_tailable.out 2>&1 &
+    onesixtyone -c /usr/share/legion/wordlists/snmp-default.txt "$cidr" -o "${cidr_dir}"onesixtyone.out -w 100 >> "${cidr_dir}"onesixtyone_tailable.out 2>&1 && finished_tool "onesixtyone" "$cidr" "${cidr_dir}onesixtyone.out" &
   else
-    printf "%b[!] CIDR range not detected. Remember you can also pass a range in CIDR notation to use enum tools that scan a wide range with %b-r <IP address>/<network mask>%b\n" "${YELLOW}" "${GREEN}" "${RESTORE}" 
+    printf "%b[!] CIDR range %bNOT%b detected. Remember you can also pass a range in CIDR notation to use enum tools that scan a wide range with %b-r <IP address>/<network mask>%b\n" "${YELLOW}" "${RED}" "${YELLOW}" "${GREEN}" "${RESTORE}" 
   fi
 }
 
+# Core functionality of this script: iterate through each port and automate launching tools
 ports_iterator() {
+  # First arg target IP, second arg dir to save output
+  dir="${2}"
+  
   # Convert comma-separated string to an array of ports
   IFS=',' read -ra PORTS_ARRAY <<< "$ports" ## TODO: convert Here-Strings to POSIX
   
+  
+  # Only look once for the wordlists
+  dir_list_medium=$(locate "directory-list-2.3-medium.txt" -l 1) && printf "%b[+]%b Found directory wordlist for web fuzzers. Using %b%s%b\n" "${GREEN}" "${RESTORE}" "${YELLOW}" "${dir_list_medium}" "${RESTORE}"
+  darkweb_top1000=$(locate "darkweb2017-top1000.txt" -l 1) && printf "%b[+]%b Found passwords wordlist for password sprayers. Using %b%s%b\n" "${GREEN}" "${RESTORE}" "${YELLOW}" "${dir_list_medium}" "${RESTORE}" 
+
   # Iterate over each port in the array
   for port in "${PORTS_ARRAY[@]}"; do ## TODO: convert array to POSIX
     # Use a case statement to perform different actions for each port
     case $port in
     25|465|587)
-      # SMTP enumeration. Just run once.
+      # SMTP enumeration. Just run once for now.
       if [ ! -f "${dir}smtp_tailable_nmap_scan.nmap" ]; then
         printf "%b[+] Running SMTP enum tools in port %s%b\n" "${GREEN}" "${port}" "${RESTORE}" 
-        nmap -p"$port" --script=smtp-commands,smtp-enum-users,smtp-open-relay "$1" -v -oA SMTP-enum >> "${dir}"smtp_tailable_nmap_scan.out 2>&1 && finished_tool "NBLookup" "$@" "${dir}SMTP-enum.nmap" &
+        nmap -p"$port" --script=smtp-commands,smtp-enum-users,smtp-open-relay "$1" -v -oA snmp-enum >> "${dir}"smtp_tailable_nmap_scan.out 2>&1 && finished_tool "Nmap for SMTP" "$@" "${dir}snmp-enum.nmap" &
       fi
       ;;
     80)
       # Common Web without TLS 
       printf "%b[+] Running Web enum tools in port 80%b\n" "${GREEN}" "${RESTORE}"
 
-      running_tool "Nikto"
-      nikto -host "$1" >> "${dir}"nikto.out 2>&1 && finished_tool "Nikto" "$@" "${dir}nikto.out" &
+      running_tool "Nikto on port 80"
+      nikto -host "$1" >> "${dir}"nikto_tailable_80.out 2>&1 && finished_tool "Nikto" "$@" "${dir}nikto_80.out" &
 
-      running_tool "ffuf"
-      ffuf -u http://"$1"/FUZZ -w "$(locate directory-list-2.3-medium.txt -l 1)":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v >> "${dir}"ffuf_80_tailable.out 2>&1 && finished_tool "ffuf" "$@" "${dir}ffuf_80.out" &
+      running_tool "ffuf on port 80"
+      ffuf -u http://"$1"/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v >> "${dir}"ffuf_80_tailable.out 2>&1 && finished_tool "ffuf" "$@" "${dir}ffuf_tailable_80.out" &
       
       wp_enumeration "$1" "80" "${dir}"
       ;;
@@ -184,35 +198,35 @@ ports_iterator() {
       # Common Web 
       printf "%b[+] Running Web enum tools in port 443%b\n" "${GREEN}" "${RESTORE}"
 
-      running_tool "nikto"
-      nikto -host "$1" >> "${dir}"nikto_tailable.out 2>&1 &
+      running_tool "Nikto"
+      nikto -host "$1" >> "${dir}"nikto_tailable_443.out 2>&1 && finished_tool "Nikto on port 443" "$@" "${dir}nikto_tailable_443.out" &
 
-      running_tool "ffuf"
-      ffuf -u https://"$1"/FUZZ -w "$(locate directory-list-2.3-medium.txt -l 1)":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v >> "${dir}"ffuf_443_tailable.out 2>&1 && finished_tool "ffuf" "$@" "${dir}ffuf_443_tailable.out" &
+      running_tool "ffuf on port 443"
+      ffuf -u https://"$1"/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v >> "${dir}"ffuf_443_tailable.out 2>&1 && finished_tool "ffuf on port 443" "$@" "${dir}ffuf_tailable_443.out" &
       
       wp_enumeration "$1" "443" "${dir}"
       ;;
     8080) 
-      # Try enumerate Service 
+      # Try enumerate Services on 8080 
       wp_enumeration "$1" "8080" "${dir}" 
 
-      tomcat_version=$(curl -s -X GET http://"${IP}":8080/docs/ | grep 'Tomcat')
+      tomcat_version=$(curl -s -X GET http://"${IP}":8080/docs/ | grep -i 'Tomcat')
       if [ -n "$tomcat_version" ]; then
         printf "%b[+] Web service Tomcat detected. Running Tomcat enum tools%b\n" "${GREEN}" "${RESTORE}"
   
         running_tool "gobuster"
-        gobuster -z -q dir -e -u "$1":8080 -w /usr/share/wordlists/dirbuster/directory-list-lowercase-2.3-medium.txt >> "${dir}"gobuster_tomcat.out 2>&1 &
+        gobuster -z -q dir -e -u "$1":8080 -w "$dir_list_medium" >> "${dir}"gobuster_tomcat.out 2>&1 && finished_tool "gobuster on port 8080" "$@" "${dir}gobuster_tomcat.out" &
         
         running_tool "hydra"
-        hydra -L users.txt -P "$(locate darkweb2017-top1000.txt -l 1)" -f "$1" http-get /manager/html >> "${dir}"hydra_tailable.out 2>&1 &
+        hydra -L users.txt -P "$darkweb_top1000" -f "$@" http-get /manager/html >> "${dir}"hydra_tailable.out 2>&1 && finished_tool "Hydra" "$@" "${dir}hydra_tailable.out" &
       fi
       ;;
     111)
       printf "%b[+] RPC service detected. Running RPC nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
-      nmap -p 111 --script=nfs-ls,nfs-statfs,nfs-showmount "$1" -oA rpc_nmap_scan >> rpc_tailable_nmap_scan 2>&1 &
+      nmap -p 111 --script=nfs-ls,nfs-statfs,nfs-showmount "$1" -oA "${dir}"rpc_nmap_scan >> rpc_tailable_nmap_scan 2>&1 && finished_tool "Nmap against RPC on port 111" "$@" "${dir}rpc_nmap_scan.nmap" &
       
       running_tool "rpcclient"
-      rpcclient -U "" "$1" >> "$dir"rpcclient_anon.out 2>&1 &
+      rpcclient -U "" "$1" >> "${dir}"rpcclient_anon.out 2>&1 && finished_tool "rpcclient" "$@" "${dir}rpcclient_anon.out"  &
       ;;
     139|445)
       # Run only once
@@ -239,7 +253,7 @@ ports_iterator() {
 # Let the fun begin! 
 main() {
   # Perform CIDR enumeration first, check if CIDR argument was passed
-  cidr_enumeration
+  cidr_enumeration "$DIR"
   
   # Check whether input is a single or multiple target and loop accordingly
   if [ ! -f "$IP" ]; then # Single target
@@ -247,7 +261,7 @@ main() {
     answers_icmp "$IP"
 
     # Do port discovery scan
-    ports_sweep "$IP" 
+    ports_sweep "$IP" "$DIR"
     
     # Abort tests if no ports were found open
     if [ "$sweep_result" -eq 1 ]; then 
@@ -256,14 +270,13 @@ main() {
     fi
 
     # If still alive, proceed with nmap scan and ports iterator
-    aggressive_scan "$IP"
+    aggressive_scan "$IP" "$DIR"
 
     # Iterate over each port in the array
-    ports_iterator "$IP" ## TODO: convert ports_iterator to POSIX
+    ports_iterator "$IP" "$DIR" ## TODO: convert ports_iterator to POSIX
       
-  # Multi-target
   else
-    # Loop through the targets and assign vars accordingly
+    # Multi-target: loop through the targets and assign vars accordingly
     line=1
     while [ "$line" -le "$list_total_lines" ]; do
       target=$(sed "${line}q;d" "$IP" 2>/dev/null)
@@ -341,13 +354,13 @@ fi
 # Check 4: Ensure base output directory is correctly set and exists
 ## TODO: create option to set custom directory if launched autonomously outside Docker
 if test "$(pwd)" = "/"; then
-  dir="/autoEnum_output/"
+  DIR="/autoEnum_output/"
 else
-  dir="$(pwd)/autoEnum_output/"
+  DIR="$(pwd)/autoEnum_output/"
 fi
 
-if [[ ! -d "$dir" ]]; then
-  mkdir "$dir"
+if [[ ! -d "$DIR" ]]; then
+  mkdir "$DIR"
 fi
 
 # Check 5: locate exists in the system
@@ -358,15 +371,15 @@ fi
 
 # ---------- Preliminary checks completed. Calling main function ----------
 # Single target
-if [[ ! -f "$IP" ]]; then 
-  printf "\n${GREEN}[+] Using ${RESTORE}'%s'${GREEN} as target\n" "$IP"
+if [[ ! -f "$IP" ]]; then   
+  printf "\n%b[+] Using '%s' as target\n" "${GREEN}" "${RESTORE}" "$IP" "${GREEN}"
 # Multiple targets
 else 
-  printf "${GREEN}[+] Using ${RESTORE}'%s'${GREEN} as targets file\n" "$IP"
-  printf "[+] Successfully identified ${RESTORE}'%s'${GREEN} targets in the file\n" "$list_total_lines"
+  printf "%b[+] Using %b'%s'%b as targets file\n" "${GREEN}" "${RESTORE}" "$IP" "${GREEN}" 
+  printf "[+] Successfully identified %b'%s'%b targets in the file\n" "${RESTORE}" "$list_total_lines" "${GREEN}"
 fi
 
-printf "[+] Using ${RESTORE}'%s'${GREEN} as directory where to put the output files\n" "$dir"
+printf "[+] Using '%b%s%b' as base directory where to put the output files\n" "${RESTORE}" "${DIR}" "${GREEN}"
 
 # Call main
 main
@@ -374,5 +387,5 @@ main
 # Getting timing score
 END="$(date +%s)"
 runtime="$((END - START))"
-printf "\n${GREEN}[+] All done! It took %s seconds to run the autoEnum based on your settings. Please allow your tools some time to finish. If you want to see what they are doing, run ${YELLOW}'tail -f ./autoEnum/<output file>' ${RESTORE}\n" "$runtime"
-printf "${GREEN}[+] Your files are available at ${RESTORE}'%s'\n" "$dir"
+printf "\n%b[+] All done! It took %s seconds to run the autoEnum based on your settings. Please allow your tools some time to finish. If you want to see what they are doing, run %b'tail -f ./autoEnum/<output file>'%b\n" "${GREEN}" "$runtime" "${YELLOW}" "${RESTORE}"
+printf "%b[+] Your files are available at ${RESTORE}'%s'\n" "${GREEN}" "$DIR"

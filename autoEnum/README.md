@@ -38,19 +38,19 @@ Examples:
 
 ## Wrapped tools currently present
 
-- Nmap
-- Rustscan
-- Nbtscan-unixwiz
-- Responder-RunFinger
-- Onesixtyone
-- Nikto
+- Enum4linux
 - Ffuf
 - Gobuster
 - Hydra
-- Smbmap
-- Rpcclient
+- Nbtscan-unixwiz
+- Nikto
+- Nmap
 - Nmblookup
-- Enum4linux
+- Onesixtyone
+- Responder-RunFinger
+- Rpcclient
+- Rustscan
+- Smbmap
 - WPScan
 
 ## Tools yet to implement
@@ -61,7 +61,7 @@ Do you have any other suggestion? Send a PR or a message!
 
 *Rustscan is **no longer** a forced pre-requisite, so if you don't have it, no worries, the initial port sweep will be run with nmap instead. If you don't want to run the [install_requisites](./install_requisites.sh) script, you can try to grab the script and run it, if you have all the tools necessary*
 
-Since this script uses multiple enumeration tools used in Penetration Test engagements, it is expected you will be using a distro like Kali Linux or Pwnbox. All the packages that don't normally come pre-installed in Kali (currently Seclists and Rustscan), are featured in the [install_requisites](./install_requisites.sh) script that you can find in this folder. Run it to automatically update your distro, install `Seclists`, `Homebrew` and `Rustscan` for you if you don't have them yet, and it will also symlink the script to your `/usr/bin` folder, you'll be able to call it just issuing `autoenum`.
+Since this script uses multiple enumeration tools used in Penetration Test engagements, it is expected you will be using a distro like `Kali Linux` or `Pwnbox`. All the packages that don't normally come pre-installed in Kali (currently `Seclists` and `Rustscan`), are featured in the [install_requisites](./install_requisites.sh) script that you can find in this folder. Run it to automatically update your distro, install `Seclists`, `Homebrew` and `Rustscan` for you if you don't have them yet, and it will also symlink the script to your `/usr/bin` folder, you'll be able to call it just issuing `autoenum`.
 
 There are other checks involved, like the presence of `locate`, which should cover the installation for other non-Kali-but-Debian-based distros. If you spot an error, please report it and I will adjust as necessary. Also, other distros will be considered under request.
 
@@ -80,6 +80,7 @@ ln mytoolkit/autoEnum/autoEnum /usr/bin/autoenum
 - [x] Experiment with nice colours
 - [x] Implement the use of `printf` instead of `echo`
 - [x] Adapt to Google's shell scripting style guide
+- [x] Implement sending notifications when tools have finished on background
 - [ ] Finish the core script
 - [ ] Test thoroughly
 - [ ] Containerise
