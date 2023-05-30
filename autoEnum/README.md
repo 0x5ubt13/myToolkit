@@ -1,12 +1,12 @@
 # autoEnum, an automatic enumeration tool
 
-Heavily inspired by [autoNmap](../autoNmap/README.md), this tool goes beyond Nmap enumeration.
+Heavily inspired by [autoNmap](../autoNmap/README.md), this tool goes beyond `Nmap` enumeration.
 
-In many external infra jobs, I found myself using autoNmap and extra enumeration tools afterwards, so I came up with the idea of including extra enumeration tools to the already nice functionality of autoNmap, so we should consider autoEnum as an **"autoNmap on steroids"**
+In many external infra jobs, I found myself using `autoNmap` and extra enumeration tools afterwards, so I came up with the idea of including extra enumeration tools to the already nice functionality of `autoNmap`, so we should consider `autoEnum` as an **"autoNmap on steroids"**
 
 Pass either a single IP address or a targets file to it and will first get the ports open on each host, and then concurrently launch tools appropriate for every open port. These will start working on the background, so allow a few moments for them to run completely.
 
-Due to some new functionality that is not present in autoNmap, autoEnum is written in a non-POSIX compliant manner (at least for now). Make sure you have bash (or zsh) installed, then simply run the script.
+Due to some new functionality that is not present in `autoNmap`, `autoEnum` is written in a non-POSIX compliant manner (at least for now). Make sure you have `bash` (or `zsh`) installed, then simply run the script.
 
 ## Usage
 
