@@ -46,6 +46,7 @@ Examples:
 - Nikto
 - Nmap
 - Nmblookup
+- Ldapsearch
 - Onesixtyone
 - Responder-RunFinger
 - Rpcclient

@@ -5,6 +5,7 @@ RESTORE="\033[0m"
 RED="\033[031m"
 GREEN="\033[32m"
 YELLOW="\033[33m"
+BLUE="\033[34m"
 START="$(date +%s)" # Timing the execution
 
 
@@ -14,6 +15,7 @@ START="$(date +%s)" # Timing the execution
 dnsServers=""
 do_help=""
 nb_checked=0
+ldap_checked=0
 
 while getopts "hr:t:d:" flag; do
   case "${flag}" in
@@ -64,6 +66,26 @@ running_tool() {
 finished_tool() {
   # First arg tool name, second arg IP address, third arg directory
   printf "%b[+] Done! %b%s%b for %b%s%b finished working on the background: cat %s\n%b" "${GREEN}" "${YELLOW}" "${1}" "${GREEN}" "${RESTORE}" "${2}" "${GREEN}" "${3}" "${RESTORE}"
+}
+
+print_phase() {
+  printf "\n%b%s%b%s%b" "${BLUE}" "[*] ---------- " "${RESTORE}" "Phase " "${YELLOW}"
+  phase="${1}"
+  case "${phase}" in
+  0)
+    printf "%s%b%s" "0" "${RESTORE}" ": running init checks ";;
+  1)
+    printf "%s%b%s" "1" "${RESTORE}" ": parse CIDR ";;
+  2)
+    printf "%s%b%s" "2" "${RESTORE}" ": parse target(s) ";;
+  3)
+    printf "%s%b%s" "3" "${RESTORE}" ": parse found ports ";;
+  4)
+    printf "%s%b%s" "4" "${RESTORE}" ": finished parsing ports and sending tools to background ";;
+  *)
+    error_msg "Development error. There are only 5 phases in the script currently";;
+  esac
+  printf "%b%s%b\n\n" "${BLUE}" "----------" "${RESTORE}"
 }
 
 print_hulk() {
@@ -132,10 +154,13 @@ ports_sweep() {
 aggressive_scan() {
   # First arg IP, second arg directory
   printf "%b[+] Starting aggressive scan against %b'%s'\n" "${YELLOW}" "${RESTORE}" "${1}"
-  printf "%b[!] Running '%bnmap -sVC %s --script=vuln -oA %snmap_scan -p%s %s &%b. Use '%btail -f %snmap_tailable_progress.out%b' to see the progress'%b\n" "${YELLOW}" "${RESTORE}" "${ping}" "${2}" "${ports}" "${YELLOW}" "${1}" "${RESTORE}" "${2}" "${YELLOW}" "${RESTORE}"
+  printf "%b[!] Running '%bnmap -sVC %s --script=vuln -oA %snmap_scan -p%s %b &%b.\n\tUse '%btail -f %snmap_tailable_progress.out%b' to see the progress'%b\n" "${YELLOW}" "${RESTORE}" "${ping}" "${2}" "${ports}" "${YELLOW}" "${1}" "${RESTORE}" "${2}" "${YELLOW}" "${RESTORE}"
   printf "%b[+] Saving output to %b${2}nmap_scan.out %bin all formats.%b\n\n" "${GREEN}" "${RESTORE}" "${GREEN}" "${RESTORE}"
   
-  nmap "${1}" -vvv -sVC "$ping" --script=vuln -oA "${2}nmap_scan" -p"$ports" >> "${2}"nmap_tailable_progress.out && xsltproc "${2}nmap_scan.xml" && finished_tool "Main aggressive nmap scan for IP ${1}" "${1}" "${2}nmap_scan.nmap" &  
+  nmap "${1}" -vvv -sVC "$ping" --script=vuln -oA "${2}nmap_scan" -p"$ports" >> "${2}"nmap_tailable_progress.out && \
+    xsltproc "${2}nmap_scan.xml" -o nmap_scan.html && \
+    printf "%b[+] Successfully generated HTML report of the Nmap scan, available at '%b%s%b'.%b\n" "${GREEN}" "${RESTORE}" "${2}nmap_scan.nmap" "${GREEN}" "${RESTORE}" && \
+    finished_tool "Main aggressive nmap scan for IP ${1}" "${1}" "${2}nmap_scan.nmap" &
 }
 
 wp_enumeration() {
@@ -194,7 +219,8 @@ ports_iterator() {
   for port in "${PORTS_ARRAY[@]}"; do ## TODO: convert array to POSIX
     # Use a case statement to perform different actions for each port
     case $port in
-    25|465|587)
+    # ---------- SMTP ----------
+    25|465|587) 
       # SMTP enumeration. Just run once for now.
       if [ ! -f "${dir}smtp_tailable_nmap_scan.nmap" ]; then
         printf "%b[+] Running SMTP enum tools in port %s%b\n" "${GREEN}" "${port}" "${RESTORE}" 
@@ -202,6 +228,7 @@ ports_iterator() {
           finished_tool "Nmap for SMTP" "${1}" "${dir}snmp-enum.nmap" &
       fi
       ;;
+    # ---------- Web ----------
     80)
       # Common Web without TLS 
       printf "%b[+] Running Web enum tools in port 80%b\n" "${GREEN}" "${RESTORE}"
@@ -245,16 +272,18 @@ ports_iterator() {
         hydra -L users.txt -P "$darkweb_top1000" -f "${1}" http-get /manager/html >> "${dir}"hydra_tailable.out 2>&1 && finished_tool "Hydra" "${1}" "${dir}hydra_tailable.out" &
       fi
       ;;
+    # ---------- RPC ----------
     111)
       # Enumerate RPC
       printf "%b[+] RPC service detected. Running RPC nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
-      nmap -p 111 --script=nfs-ls,nfs-statfs,nfs-showmount "${1}" -oA "${dir}"rpc_nmap_scan >> rpc_tailable_nmap_scan 2>&1 && \
+      nmap -p 111 --script "nfs*" "${1}" -oA "${dir}"rpc_nmap_scan >> rpc_tailable_nmap_scan 2>&1 && \
         finished_tool "Nmap against RPC on port 111" "${1}" "${dir}rpc_nmap_scan.nmap" &
       
-      running_tool "rpcclient"
+      running_tool "RPCclient"
       rpcclient -U "" "${1}" >> "${dir}"rpcclient_anon.out 2>&1 && \
-        finished_tool "rpcclient" "${1}" "${dir}rpcclient_anon.out" &
+        finished_tool "RPCclient" "${1}" "${dir}rpcclient_anon.out" &
       ;;
+    # ---------- NetBios / SMB ----------
     139|445)
       # Enumerate NB/SMB. Run only once
       if [ "$nb_checked" -eq 0 ]; then
@@ -274,6 +303,27 @@ ports_iterator() {
           finished_tool "enum4linux" "${1}" "${dir}enum4linux_anon.out" &
       fi
       ;;
+    # ---------- LDAP ----------
+    389|636|3268|3269)
+      # Run only once
+      if [ "$ldap_checked" -eq 0 ]; then
+        ldap_checked=1
+        printf "%b[+] Running LDAP enum tools in port %s%b\n" "${GREEN}" "${port}" "${RESTORE}" 
+        
+        running_tool "ldapsearch (null credentials attack)"
+        ldapsearch -x -H ldap://"${1}" -D '' -w '' -b "DC=<1_SUBDOMAIN>,DC=<TLD>" >> "${dir}"ldapsearch.out 2>&1 && \
+          finished_tool "ldapsearch" "${1}" "${dir}ldapsearch.out" &
+        
+        running_tool "Nmap for LDAP"
+        nmap -p"$port" -n -sV --script "ldap* and not brute" "${1}" -v -oA ldap_enum >> "${dir}"ldap_tailable_nmap_scan.out 2>&1 && \
+          finished_tool "Nmap for LDAP" "${1}" "${dir}ldap_enum.nmap" &
+      fi
+      ;;
+    # ---------- SSH ----------
+    22)
+      nmap -p22 "${1}" --script "ssh*" -oN "${dir}ssh_enum" -v >> "${dir}"ssh_tailable_nmap_scan.out 2>&1 && \
+        finished_tool "Nmap for SSH" "${1}" "${dir}ssh_enum.nmap" &
+      ;;
     *)
       printf "%b[-]%b Port %b%s%b detected, but functionality to enumerate it has not been implemented yet.\n" "${RED}" "${RESTORE}" "${YELLOW}" "$port" "${RESTORE}"
       ;;
@@ -286,18 +336,18 @@ ports_iterator() {
 # ---------- Let the fun begin! MAIN Function ----------
 
 main() {
+  print_phase 1
   # Perform CIDR enumeration first, check if CIDR argument was passed
   cidr_enumeration "${DIR}"
   
+  print_phase 2
   # Check whether input is a single or multiple target and loop accordingly
   if [ ! -f "$IP" ]; then 
     # ---------- Single target ----------
     dir="${DIR}${IP}/"
 
     # Colouring red to catch mkdir's File exists error
-    printf "%b" "${RED}" 
-    mkdir "${dir}"
-    printf "%b" "${RESTORE}"
+    printf "%b" "${RED}"; mkdir "${dir}"; printf "%b" "${RESTORE}"
 
     # Checking whether the target is reachable via ping
     answers_icmp "${IP}"
@@ -311,16 +361,16 @@ main() {
       exit 1
     fi
 
+    print_phase 3
     # If still alive, proceed with nmap scan and ports iterator
     aggressive_scan "${IP}" "${dir}"
 
     # Iterate over each port in the array
     ports_iterator "${IP}" "${dir}" ## TODO: convert ports_iterator to POSIX
-      
-  else
-    # ---------- Multi-target: ----------
+  else # ---------- Multi-target: ----------
     # loop through the targets and assign vars accordingly
     line=1
+    print_phase 3
     while [ "$line" -le "$list_total_lines" ]; do
       target=$(sed "${line}q;d" "$IP" 2>/dev/null)
       # target_number="_target_${line}"
@@ -365,6 +415,8 @@ main() {
 # Check 0: Launch fancy (Bruce) Banner! 
 print_hulk
 # Ba-dum-tss!
+
+print_phase 0
 
 # Check 1: help flag passed?
 if [ -n "$do_help" ]; then
@@ -413,7 +465,7 @@ fi
 
 # Single target
 if [[ ! -f "$IP" ]]; then   
-  printf "\n%b[+] Using %b'%s'%b as target\n" "${GREEN}" "${RESTORE}" "${IP}" "${GREEN}"
+  printf "%b[+] Using %b'%s'%b as target\n" "${GREEN}" "${RESTORE}" "${IP}" "${GREEN}"
 # Multiple targets
 else 
   printf "%b[+] Using %b'%s'%b as targets file\n" "${GREEN}" "${RESTORE}" "${IP}" "${GREEN}" 
@@ -426,7 +478,8 @@ printf "[+] Using '%b%s%b' as base directory where to put the output files\n" "$
 main
 
 # Finished. Getting timing score
+print_phase 4
 END="$(date +%s)"
 runtime="$((END - START))"
-printf "\n%b[+] All done! It took %s seconds to run the autoEnum based on your settings. Please allow your tools some time to finish. If you want to see what they are doing, run %b'tail -f ./autoEnum_output/<IP Address>/<output file>'%b\n" "${GREEN}" "$runtime" "${YELLOW}" "${RESTORE}"
+printf "\n%b[+] All done! It took %s seconds to run autoEnum based on your settings. Please allow your tools some time to finish. \n\tIf you want to see what they are doing, run %b'tail -f ./autoEnum_output/<IP Address>/<output file>'%b\n" "${GREEN}" "$runtime" "${YELLOW}" "${RESTORE}"
 printf "%b[+] Your files will be available at ${RESTORE}'%s'\n" "${GREEN}" "${DIR}"
