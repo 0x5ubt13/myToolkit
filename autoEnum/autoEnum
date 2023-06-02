@@ -37,14 +37,14 @@ usage() {
   printf "%b\t-h :%b Display this help and exit.\n" "${YELLOW}" "${RESTORE}"
   printf "%b\t-r :%b Specify a CIDR range to use tools for whole subnets.\n" "${YELLOW}" "${RESTORE}"
   printf "%b\t-t :%b Run port sweep with nmap and the flag --top-ports=<your input>\n" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-d :%b Specify custom DNS servers. Default option: ${YELLOW}-n${RESTORE}.\n" "${YELLOW}" "${RESTORE}"
-  printf "%b\nExamples: \n\t%s 192.168.142.93\n\t%s 10.129.121.60 ${YELLOW}-d${GREEN} <serv1[,serv2],...>\n\t%s 10.129.121.60 ${YELLOW}-r${GREEN} 10.129.121.0/24\n\t%s targets_file.txt ${YELLOW}-r${GREEN} 10.10.8.0/24" "${GREEN}" "$(basename "$0")" "$(basename "$0")" "$(basename "$0")" "$(basename "$0")"
+  printf "%b\t-d :%b Specify custom DNS servers. Default option: %b-n%b.\n" "${YELLOW}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
+  printf "%b\nExamples:\n\t%s 192.168.142.93\n\t%s 10.129.121.60 %b-d%b <serv1[,serv2],...>\n\t%s 10.129.121.60 %b-r%b 10.129.121.0/24\n\t%s targets_file.txt %b-r%b 10.10.8.0/24%b" "${GREEN}" "$(basename "$0")" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "${RESTORE}"
   exit 1
 }
 
 # Print red error messages and call usage
 error_msg() {
-  printf "%b[-] Error:%b %s\n" "${RED}" "$1" "${RESTORE}" 1>&2; usage; 
+  printf "%b[-] Error detected: \n[-] %s%b\n" "${RED}" "$1" "${RESTORE}" 1>&2; usage; 
 }
 
 # Test whether the host is pingable and set -Pn accordingly
@@ -60,43 +60,43 @@ answers_icmp() {
 }
 
 running_tool() {
-  printf "%b[!] Starting %s and sending it to the background.%b\n" "${YELLOW}" "${1}" "${RESTORE}"
+  printf "%b[!] Starting %b%s%b and sending it to the background.%b\n" "${YELLOW}" "${BLUE}" "${1}" "${YELLOW}" "${RESTORE}"
 }
 
 finished_tool() {
   # First arg tool name, second arg IP address, third arg directory
-  printf "%b[+] Done! %b%s%b for %b%s%b finished working on the background: cat %s\n%b" "${GREEN}" "${YELLOW}" "${1}" "${GREEN}" "${RESTORE}" "${2}" "${GREEN}" "${3}" "${RESTORE}"
+  printf "%b[+] Done! %b%s%b for '%b%s%b' finished working on the background. Shortcut:\n\tless %s\n%b" "${GREEN}" "${BLUE}" "${1}" "${GREEN}" "${RESTORE}" "${2}" "${YELLOW}" "${3}" "${RESTORE}"
 }
 
 print_phase() {
-  printf "\n%b%s%b%s%b" "${BLUE}" "[*] ---------- " "${RESTORE}" "Phase " "${YELLOW}"
+  printf "\n%b%s%b%s%b" "${BLUE}" "[*] ---------- " "${RESTORE}" "Starting Phase " "${YELLOW}"
   phase="${1}"
   case "${phase}" in
   0)
-    printf "%s%b%s" "0" "${RESTORE}" ": running init checks ";;
+    printf "%s%b%s" "0" "${RESTORE}" ": running initial checks ";;
   1)
-    printf "%s%b%s" "1" "${RESTORE}" ": parse CIDR ";;
+    printf "%s%b%s" "1" "${RESTORE}" ": parsing the CIDR range ";;
   2)
-    printf "%s%b%s" "2" "${RESTORE}" ": parse target(s) ";;
+    printf "%s%b%s" "2" "${RESTORE}" ": parsing target or list ";;
   3)
-    printf "%s%b%s" "3" "${RESTORE}" ": parse found ports ";;
+    printf "%s%b%s" "3" "${RESTORE}" ": parsing found ports ";;
   4)
-    printf "%s%b%s" "4" "${RESTORE}" ": finished parsing ports and sending tools to background ";;
+    printf "%s%b%s" "4" "${RESTORE}" ": background tools working ";;
   *)
-    error_msg "Development error. There are only 5 phases in the script currently";;
+    error_msg "Development error. There are currently 5 phases in the script ";;
   esac
   printf "%b%s%b\n\n" "${BLUE}" "----------" "${RESTORE}"
 }
 
 print_hulk() {
   printf "
-              _____      __________                         
-______ ____  ___  /_________  ____/__________  ________ ___ 
-_  __ \`/  / / /  __/  __ \\_  __/  __  __ \\  / / /_  __ \`__ \\
-/ /_/ // /_/ // /_ / /_/ /  /___  _  / / / /_/ /_  / / / / /
-\__,_/ \\__,_/ \\__/ \\____//_____/  /_/ /_/\\__,_/ /_/ /_/ /_/ 
-                    by 0x5ubt13                               \n                                            
-"                                                
+%b              _____      %b__________                         
+%b______ ____  ___  /_______%b__  ____/__________  ________ ___ 
+%b_  __ \`/  / / /  __/  __ \\%b_  __/  __  __ \\  / / /_  __ \`__ \\
+%b/ /_/ // /_/ // /_ / /_/ /%b  /___  _  / / / /_/ /_  / / / / /
+%b\__,_/ \\__,_/ \\__/ \\____/%b/_____/  /_/ /_/\\__,_/ /_/ /_/ /_/ 
+%b                    by 0x5ubt13                               \n%b                                            
+" "${YELLOW}" "${RED}" "${YELLOW}" "${RED}" "${YELLOW}" "${RED}" "${YELLOW}" "${RED}" "${YELLOW}" "${RED}" "${GREEN}" "${RESTORE}"
 
 }
 
@@ -128,8 +128,8 @@ ports_sweep() {
       rustscan_check=$(locate "/bin/rustscan" -l 1)
       if [ -n "$rustscan_check" ]; then
         # Rustscan ports sweep
-        printf "%b[+] Rustscan installed, using Rustscan%b" "${GREEN}" "${RESTORE}"
-        printf "\n%b[+] Starting Rustscan SYN port discovery scan against %b'%s'%b, please bear with...\n" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"
+        printf "%b[+] %bRustscan%b found, proceeding to sweep ports with Rustscan%b" "${GREEN}" "${BLUE}" "${GREEN}" "${RESTORE}"
+        printf "\n%b[!] Starting %bRustscan's%b SYN port discovery scan against %b'%s'%b, please bear with...\n" "${YELLOW}" "${BLUE}" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"
         ports="$(rustscan -a "$IP" "$dnsServers" --ulimit 5000 -g | cut -d ' ' -f 3 | sed 's/[^[:alnum:],\t]//g')"
       else
         # Nmap ports sweep
@@ -146,21 +146,21 @@ ports_sweep() {
   else
     sweep_result=0 # Needed to check later on to avoid throwing an "illegal number" error
     echo "$ports" > "${2}"open_ports.txt
-    printf "\n%b[+] Done! Open ports in %b'%s'%b: %b%s\n%b[+] Saved as %b%sopen_ports.txt%b in nmap-friendly format.%b\n" "${GREEN}" "${RESTORE}" "${1}" "${GREEN}" "${RESTORE}" "${ports}" "${GREEN}" "${RESTORE}" "${2}" "${GREEN}" "${RESTORE}"
+    printf "%b[+] Done! Found open ports on target.\n\tOpen ports in %b'%s'%b: %b%s\n%b[*] Saved as '%b%sopen_ports.txt%b' in nmap-friendly format.%b\n" "${GREEN}" "${RESTORE}" "${1}" "${GREEN}" "${RESTORE}" "${ports}" "${BLUE}" "${RESTORE}" "${2}" "${BLUE}" "${RESTORE}"
   fi   
 }
 
 # Proceed with an aggressive scan
 aggressive_scan() {
   # First arg IP, second arg directory
-  printf "%b[+] Starting aggressive scan against %b'%s'\n" "${YELLOW}" "${RESTORE}" "${1}"
-  printf "%b[!] Running '%bnmap -sVC %s --script=vuln -oA %snmap_scan -p%s %b &%b.\n\tUse '%btail -f %snmap_tailable_progress.out%b' to see the progress'%b\n" "${YELLOW}" "${RESTORE}" "${ping}" "${2}" "${ports}" "${YELLOW}" "${1}" "${RESTORE}" "${2}" "${YELLOW}" "${RESTORE}"
-  printf "%b[+] Saving output to %b${2}nmap_scan.out %bin all formats.%b\n\n" "${GREEN}" "${RESTORE}" "${GREEN}" "${RESTORE}"
+  printf "%b[!] Starting %bmain aggressive nmap scan%b against %b'%s' and sending it to the background\n" "${YELLOW}" "${BLUE}" "${YELLOW}" "${RESTORE}" "${1}"
+  printf "%b[!] Running '%bnmap -sVC -v %s --script=vuln -oA %snmap_scan -p%s %s --stats-every 15s &%b.\n\tUse '%btail -f %snmap_tailable_progress.out%b' to see the progress'%b\n" "${YELLOW}" "${RESTORE}" "${ping}" "${2}" "${ports}" "${1}" "${YELLOW}" "${RESTORE}" "${2}" "${YELLOW}" "${RESTORE}"
+  printf "%b[+] Saving output to %b%snmap_scan.out %bin all formats.%b\n\n" "${GREEN}" "${RESTORE}" "${2}" "${GREEN}" "${RESTORE}"
   
-  nmap "${1}" -vvv -sVC "$ping" --script=vuln -oA "${2}nmap_scan" -p"$ports" >> "${2}"nmap_tailable_progress.out && \
-    xsltproc "${2}nmap_scan.xml" -o nmap_scan.html && \
+  nmap "${1}" -v -sVC "$ping" --script=vuln -oA "${2}nmap_scan" -p"$ports" --stats-every 15s >> "${2}"nmap_tailable_progress.out && \
+    xsltproc "${2}nmap_scan.xml" -o "${2}nmap_scan.html" && \
     printf "%b[+] Successfully generated HTML report of the Nmap scan, available at '%b%s%b'.%b\n" "${GREEN}" "${RESTORE}" "${2}nmap_scan.nmap" "${GREEN}" "${RESTORE}" && \
-    finished_tool "Main aggressive nmap scan for IP ${1}" "${1}" "${2}nmap_scan.nmap" &
+    finished_tool "Main aggressive nmap scan" "${1}" "${2}nmap_scan.nmap" &
 }
 
 wp_enumeration() {
@@ -197,7 +197,7 @@ cidr_enumeration() {
     onesixtyone -c /usr/share/legion/wordlists/snmp-default.txt "$cidr" -o "${cidr_dir}"onesixtyone.out -w 100 >> "${cidr_dir}"onesixtyone_tailable.out 2>&1 && \
       finished_tool "onesixtyone" "$cidr" "${cidr_dir}onesixtyone.out" &
   else
-    printf "%b[!] CIDR range %bNOT%b detected. Remember you can also pass a range in CIDR notation to use enum tools that scan a wide range with %b-r <IP address>/<network mask>%b\n" "${YELLOW}" "${RED}" "${YELLOW}" "${GREEN}" "${RESTORE}" 
+    printf "%b[!] CIDR range %bNOT%b detected. Remember you can also pass a range in CIDR notation to use enum tools that scan a wide range with \n\t%bautoenum -r <IP address>/<network mask>%b\n" "${YELLOW}" "${RED}" "${YELLOW}" "${BLUE}" "${RESTORE}" 
   fi
 }
 
@@ -211,9 +211,9 @@ ports_iterator() {
   
   # Only look once for the wordlists
   dir_list_medium=$(locate "directory-list-2.3-medium.txt" -l 1) && \
-    printf "%b[+]%b Found directory wordlist for web fuzzers. Using %b%s%b\n" "${GREEN}" "${RESTORE}" "${YELLOW}" "${dir_list_medium}" "${RESTORE}"
+    printf "%b[+] Found directory wordlist for web fuzzers.\n\tUsing '%b%s%b%s'\n" "${GREEN}" "${YELLOW}" "${dir_list_medium}" "${GREEN}" "${RESTORE}"
   darkweb_top1000=$(locate "darkweb2017-top1000.txt" -l 1) && \
-    printf "%b[+]%b Found passwords wordlist for password sprayers. Using %b%s%b\n" "${GREEN}" "${RESTORE}" "${YELLOW}" "${dir_list_medium}" "${RESTORE}" 
+    printf "%b[+] Found passwords wordlist for password sprayers.\n\tUsing '%b%s%b%s'\n" "${GREEN}" "${YELLOW}" "${darkweb_top1000}" "${GREEN}" "${RESTORE}" 
 
   # Iterate over each port in the array
   for port in "${PORTS_ARRAY[@]}"; do ## TODO: convert array to POSIX
@@ -236,9 +236,10 @@ ports_iterator() {
       running_tool "Nikto on port 80"
       nikto -host "${1}" >> "${dir}"nikto_tailable_80.out 2>&1 && \
         finished_tool "Nikto" "${1}" "${dir}nikto_80.out" &
-
+      
+      # ffuf killswitch activated after 5 mins of running to save energy and avoid dangling processes consuming CPU
       running_tool "ffuf on port 80"
-      ffuf -u http://"${1}"/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v >> "${dir}"ffuf_80_tailable.out 2>&1 && \
+      ffuf -u http://"${1}":80/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 >> "${dir}"ffuf_80_tailable.out 2>&1 && \
         finished_tool "ffuf" "${1}" "${dir}ffuf_tailable_80.out" &
       
       wp_enumeration "${1}" "80" "${dir}"
@@ -251,8 +252,9 @@ ports_iterator() {
       nikto -host "${1}" >> "${dir}"nikto_tailable_443.out 2>&1 && \
         finished_tool "Nikto on port 443" "${1}" "${dir}nikto_tailable_443.out" &
 
+      # ffuf killswitch activated after 5 mins of running to save energy and avoid dangling processes consuming CPU
       running_tool "ffuf on port 443"
-      ffuf -u https://"${1}"/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v >> "${dir}"ffuf_443_tailable.out 2>&1 && \
+      ffuf -u https://"${1}":443/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 >> "${dir}"ffuf_443_tailable.out 2>&1 && \
         finished_tool "ffuf on port 443" "${1}" "${dir}ffuf_tailable_443.out" &
       
       wp_enumeration "${1}" "443" "${dir}"
@@ -266,10 +268,12 @@ ports_iterator() {
         printf "%b[+] Web service Tomcat detected. Running Tomcat enum tools%b\n" "${GREEN}" "${RESTORE}"
   
         running_tool "gobuster"
-        gobuster -z -q dir -e -u "${1}":8080 -w "$dir_list_medium" >> "${dir}"gobuster_tomcat.out 2>&1 && finished_tool "gobuster on port 8080" "${1}" "${dir}gobuster_tomcat.out" &
+        gobuster -z -q dir -e -u "${1}":8080 -w "$dir_list_medium" >> "${dir}"gobuster_tomcat.out 2>&1 && \
+          finished_tool "gobuster on port 8080" "${1}" "${dir}gobuster_tomcat.out" &
         
         running_tool "hydra"
-        hydra -L users.txt -P "$darkweb_top1000" -f "${1}" http-get /manager/html >> "${dir}"hydra_tailable.out 2>&1 && finished_tool "Hydra" "${1}" "${dir}hydra_tailable.out" &
+        hydra -L users.txt -P "$darkweb_top1000" -f "${1}" http-get /manager/html >> "${dir}"hydra_tailable.out 2>&1 && \
+          finished_tool "Hydra" "${1}" "${dir}hydra_tailable.out" &
       fi
       ;;
     # ---------- RPC ----------
@@ -322,14 +326,18 @@ ports_iterator() {
     # ---------- SSH ----------
     22)
       nmap -p22 "${1}" --script "ssh*" -oN "${dir}ssh_enum" -v >> "${dir}"ssh_tailable_nmap_scan.out 2>&1 && \
-        finished_tool "Nmap for SSH" "${1}" "${dir}ssh_enum.nmap" &
+        finished_tool "Nmap scripts for SSH" "${1}" "${dir}ssh_enum.nmap" &
+      ;;
+    21)
+      nmap -p21 "${1}" --script "ftp-*" -oN "${dir}ftp_enum" -v >> "${dir}"ftp_tailable_nmap_scan.out 2>&1 && \
+        finished_tool "Nmap scripts for FTP" "${1}" "${dir}ftp_enum.nmap" &
       ;;
     *)
       printf "%b[-]%b Port %b%s%b detected, but functionality to enumerate it has not been implemented yet.\n" "${RED}" "${RESTORE}" "${YELLOW}" "$port" "${RESTORE}"
       ;;
     esac
   done
-  printf "%b[+] Done! All well-known ports included in the script successfully parsed for %b%s%b. Enjoy!\n%b" "${GREEN}" "${RESTORE}" "${1}" "${GREEN}" "${RESTORE}"
+  printf "%b[+] Done! All well-known ports included in the script successfully parsed for %b%s%b.\n%b" "${GREEN}" "${RESTORE}" "${1}" "${GREEN}" "${RESTORE}"
 }
 
 
@@ -342,12 +350,13 @@ main() {
   
   print_phase 2
   # Check whether input is a single or multiple target and loop accordingly
-  if [ ! -f "$IP" ]; then 
+  if [[ ! -f "$IP" ]]; then 
     # ---------- Single target ----------
     dir="${DIR}${IP}/"
 
     # Colouring red to catch mkdir's File exists error
     printf "%b" "${RED}"; mkdir "${dir}"; printf "%b" "${RESTORE}"
+    printf "%b[+] Using '%b%s%b' as single target IP and '%b%s%b' for all the tools output%b\n" "${GREEN}" "${RESTORE}" "${IP}" "${GREEN}" "${RESTORE}" "${dir}" "${GREEN}" "${RESTORE}"
 
     # Checking whether the target is reachable via ping
     answers_icmp "${IP}"
@@ -368,6 +377,9 @@ main() {
     # Iterate over each port in the array
     ports_iterator "${IP}" "${dir}" ## TODO: convert ports_iterator to POSIX
   else # ---------- Multi-target: ----------
+    printf "%b[+] Using %b'%s'%b as targets file\n" "${GREEN}" "${RESTORE}" "${IP}" "${GREEN}" 
+    printf "[+] Successfully identified %b'%s'%b targets in the file\n" "${RESTORE}" "${list_total_lines}" "${GREEN}"
+
     # loop through the targets and assign vars accordingly
     line=1
     print_phase 3
@@ -376,14 +388,12 @@ main() {
       # target_number="_target_${line}"
       dir="$(pwd)/nmap/${target}/"
   
-      # colouring red to catch mkdir's File exists error
-      printf "%b" "${RED}" 
-      mkdir "${dir}"
-      printf "%b" "${RESTORE}"
+      # Colouring red to catch mkdir's File exists error
+      printf "%b" "${RED}"; mkdir "${dir}"; printf "%b" "${RESTORE}"
       
       # More info to console
       printf "%b[+] Attacking target '%b%s%b/%b%s%b': '%b%s%b'. " "${GREEN}" "${RESTORE}" "${line}" "${GREEN}" "${RESTORE}" "$list_total_lines" "${GREEN}" "${RESTORE}" "$target" "${GREEN}"
-      printf "Saving all output of this target to %b%s\n" "${RESTORE}" "${dir}"
+      printf "%b[+] Using '%b%s%b' for all this target's tools output%b\n" "${GREEN}" "${RESTORE}" "${dir}" "${GREEN}" "${RESTORE}" 
   
       # TCP Scans
       # Checking whether the target is reachable via ping
@@ -420,6 +430,7 @@ print_phase 0
 
 # Check 1: help flag passed?
 if [ -n "$do_help" ]; then
+    printf "%b[*] Help flag detected. Aborting other cheks and printing usage.\n%b" "${BLUE}" "${RESTORE}"
     usage
 fi
 
@@ -460,26 +471,19 @@ if [ -z "$updatedb_check" ]; then
   error_msg "AutoEnum needs \"locate\" to be installed. Please see or run \"install_requisites.sh\""
 fi
 
+printf "%b[+] Using '%b%s%b' as base directory where to save the output files%b\n" "${GREEN}" "${RESTORE}" "${DIR}" "${GREEN}" "${RESTORE}"
+
 
 # ---------- Preliminary checks completed. Starting engines calling main function ----------
 
-# Single target
-if [[ ! -f "$IP" ]]; then   
-  printf "%b[+] Using %b'%s'%b as target\n" "${GREEN}" "${RESTORE}" "${IP}" "${GREEN}"
-# Multiple targets
-else 
-  printf "%b[+] Using %b'%s'%b as targets file\n" "${GREEN}" "${RESTORE}" "${IP}" "${GREEN}" 
-  printf "[+] Successfully identified %b'%s'%b targets in the file\n" "${RESTORE}" "${list_total_lines}" "${GREEN}"
-fi
-
-printf "[+] Using '%b%s%b' as base directory where to put the output files\n" "${RESTORE}" "${DIR}" "${GREEN}"
-
 # Let there be (~l~i~g~h~t~) enumeration.
 main
+
+# ---------- Finish script and wait for tools to finish on the background ----------
 
 # Finished. Getting timing score
 print_phase 4
 END="$(date +%s)"
 runtime="$((END - START))"
-printf "\n%b[+] All done! It took %s seconds to run autoEnum based on your settings. Please allow your tools some time to finish. \n\tIf you want to see what they are doing, run %b'tail -f ./autoEnum_output/<IP Address>/<output file>'%b\n" "${GREEN}" "$runtime" "${YELLOW}" "${RESTORE}"
-printf "%b[+] Your files will be available at ${RESTORE}'%s'\n" "${GREEN}" "${DIR}"
+printf "%b[*] All done! It only took '%b%s seconds%b' to run autoEnum based on your settings!! Please allow your tools some time to finish. \n\tIf you want to see what they are doing, run %b'tail -f %s/<IP Address>/<output file>'%b\n" "${BLUE}" "${GREEN}" "$runtime" "${BLUE}" "${YELLOW}" "${DIR}" "${RESTORE}"
+printf "\n\n%b[*] %s" "${BLUE}" "This tool is still in its early days. Do you have any feedback? Please feel free to reach out: https://github.com/0x5ubt13"
