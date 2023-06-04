@@ -332,6 +332,9 @@ ports_iterator() {
       nmap -p21 "${1}" --script "ftp-*" -oN "${dir}ftp_enum" -v >> "${dir}"ftp_tailable_nmap_scan.out 2>&1 && \
         finished_tool "Nmap scripts for FTP" "${1}" "${dir}ftp_enum.nmap" &
       ;;
+    # To add:
+    #   - SQL
+    #   - TNS (1521)
     *)
       printf "%b[-]%b Port %b%s%b detected, but functionality to enumerate it has not been implemented yet.\n" "${RED}" "${RESTORE}" "${YELLOW}" "$port" "${RESTORE}"
       ;;
