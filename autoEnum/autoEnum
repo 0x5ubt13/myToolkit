@@ -327,14 +327,18 @@ ports_iterator() {
     22)
       nmap -p22 "${1}" --script "ssh*" -oN "${dir}ssh_enum" -v >> "${dir}"ssh_tailable_nmap_scan.out 2>&1 && \
         finished_tool "Nmap scripts for SSH" "${1}" "${dir}ssh_enum.nmap" &
+      # TODO: add hydra and try to force a low hanging fruit list
       ;;
     21)
       nmap -p21 "${1}" --script "ftp-*" -oN "${dir}ftp_enum" -v >> "${dir}"ftp_tailable_nmap_scan.out 2>&1 && \
         finished_tool "Nmap scripts for FTP" "${1}" "${dir}ftp_enum.nmap" &
       ;;
-    # To add:
-    #   - SQL
-    #   - TNS (1521)
+      # To add:
+      #   - SQL
+      #   - TNS (1521)
+      #   - rexec, rsh and rlogin -> hydra (512, 513, 514)
+      #   - rsync (873)
+      #   - rtsp -> hydra (554, 8554)
     *)
       printf "%b[-]%b Port %b%s%b detected, but functionality to enumerate it has not been implemented yet.\n" "${RED}" "${RESTORE}" "${YELLOW}" "$port" "${RESTORE}"
       ;;
