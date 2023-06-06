@@ -16,10 +16,14 @@ dnsServers=""
 do_help=""
 nb_checked=0
 ldap_checked=0
+verbose=0
+quiet=0
 
-while getopts "hr:t:d:" flag; do
+while getopts "hvqr:t:d:" flag; do
   case "${flag}" in
     h) do_help="yes";;
+    v) verbose=1;;
+    q) quiet=1;;
     r) cidr="${OPTARG}";;
     t) top="${OPTARG}";;
     d) dnsServers="--dns-servers ${OPTARG}";;
@@ -34,11 +38,13 @@ shift $((OPTIND-1))
 # Print usage and exit
 usage() {
   printf "\n%bUsage: %b%s [OPTIONS] <Single target's IP/Targets file>\n" "${GREEN}" "${RESTORE}" "$(basename "$0")"
-  printf "%b\t-h :%b Display this help and exit.\n" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-r :%b Specify a CIDR range to use tools for whole subnets.\n" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-t :%b Run port sweep with nmap and the flag --top-ports=<your input>\n" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-d :%b Specify custom DNS servers. Default option: %b-n%b.\n" "${YELLOW}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
-  printf "%b\nExamples:\n\t%s 192.168.142.93\n\t%s 10.129.121.60 %b-d%b <serv1[,serv2],...>\n\t%s 10.129.121.60 %b-r%b 10.129.121.0/24\n\t%s targets_file.txt %b-r%b 10.10.8.0/24%b" "${GREEN}" "$(basename "$0")" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "${RESTORE}"
+  printf "%b\t-h :%b Help      - Display this help and exit.\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-v :%b Verbose   - Increase verbosity of the script.\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-q :%b Quiet     - Don't print the cool banner.\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-r :%b Range     - Specify a CIDR range to use tools for whole subnets.\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-t :%b Top ports - Run port sweep with nmap and the flag --top-ports=<your input>\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-d :%b DNS       - Specify custom DNS servers. Default option: %b-n%b.\n" "${YELLOW}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
+  printf "%b\nExamples:\n\t%s 192.168.142.93\n\t%s %b-v%b 192.168.142.93\n\t%s 10.129.121.60 %b-d%b <serv1[,serv2],...>\n\t%s 10.129.121.60 %b-r%b 10.129.121.0/24\n\t%s targets_file.txt %b-r%b 10.10.8.0/24%b" "${GREEN}" "$(basename "$0")" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "${RESTORE}"
   exit 1
 }
 
@@ -65,7 +71,7 @@ running_tool() {
 
 finished_tool() {
   # First arg tool name, second arg IP address, third arg directory
-  printf "%b[+] Done! %b%s%b for '%b%s%b' finished working on the background. Shortcut:\n\tless %s\n%b" "${GREEN}" "${BLUE}" "${1}" "${GREEN}" "${RESTORE}" "${2}" "${YELLOW}" "${3}" "${RESTORE}"
+  printf "%b[+] Done! %b%s%b for '%b%s%b' finished working on the background.\n\tShortcut: '%bless %s%b'%b\n" "${GREEN}" "${BLUE}" "${1}" "${GREEN}" "${RESTORE}" "${2}" "${GREEN}" "${YELLOW}" "${3}" "${GREEN}" "${RESTORE}"
 }
 
 print_phase() {
@@ -153,14 +159,14 @@ ports_sweep() {
 # Proceed with an aggressive scan
 aggressive_scan() {
   # First arg IP, second arg directory
-  printf "%b[!] Starting %bmain aggressive nmap scan%b against %b'%s' and sending it to the background\n" "${YELLOW}" "${BLUE}" "${YELLOW}" "${RESTORE}" "${1}"
-  printf "%b[!] Running '%bnmap -sVC -v %s --script=vuln -oA %snmap_scan -p%s %s --stats-every 15s &%b.\n\tUse '%btail -f %snmap_tailable_progress.out%b' to see the progress'%b\n" "${YELLOW}" "${RESTORE}" "${ping}" "${2}" "${ports}" "${1}" "${YELLOW}" "${RESTORE}" "${2}" "${YELLOW}" "${RESTORE}"
+  printf "%b[!] Starting %bmain aggressive nmap scan%b against %b'%s'%b and sending it to the background.\n%b" "${YELLOW}" "${BLUE}" "${YELLOW}" "${RESTORE}" "${1}" "${YELLOW}" "${RESTORE}"
+  printf "%b[!] Running '%bnmap -A -v %s --script=vuln -oA %snmap_scan -p%s %s --stats-every 15s &%b'.\n\tShortcut: '%btail -f %snmap_tailable_progress.out%b'%b\n" "${YELLOW}" "${RESTORE}" "${ping}" "${2}" "${ports}" "${1}" "${YELLOW}" "${RESTORE}" "${2}" "${YELLOW}" "${RESTORE}"
   printf "%b[+] Saving output to %b%snmap_scan.out %bin all formats.%b\n\n" "${GREEN}" "${RESTORE}" "${2}" "${GREEN}" "${RESTORE}"
   
-  nmap "${1}" -v -sVC "$ping" --script=vuln -oA "${2}nmap_scan" -p"$ports" --stats-every 15s >> "${2}"nmap_tailable_progress.out && \
+  nmap "${1}" -v -A "$ping" --script=vuln -oA "${2}nmap_scan" -p"$ports" --stats-every 15s >> "${2}"nmap_tailable_progress.out && \
     xsltproc "${2}nmap_scan.xml" -o "${2}nmap_scan.html" && \
-    printf "%b[+] Successfully generated HTML report of the Nmap scan, available at '%b%s%b'.%b\n" "${GREEN}" "${RESTORE}" "${2}nmap_scan.nmap" "${GREEN}" "${RESTORE}" && \
-    finished_tool "Main aggressive nmap scan" "${1}" "${2}nmap_scan.nmap" &
+    finished_tool "Main aggressive nmap scan" "${1}" "${2}nmap_scan.nmap" && \
+    printf "%b[+] Successfully generated HTML report of the Nmap scan, available at '%b%s%b'.%b\n" "${GREEN}" "${RESTORE}" "${2}nmap_scan.html" "${GREEN}" "${RESTORE}" &
 }
 
 wp_enumeration() {
@@ -197,7 +203,7 @@ cidr_enumeration() {
     onesixtyone -c /usr/share/legion/wordlists/snmp-default.txt "$cidr" -o "${cidr_dir}"onesixtyone.out -w 100 >> "${cidr_dir}"onesixtyone_tailable.out 2>&1 && \
       finished_tool "onesixtyone" "$cidr" "${cidr_dir}onesixtyone.out" &
   else
-    printf "%b[!] CIDR range %bNOT%b detected. Remember you can also pass a range in CIDR notation to use enum tools that scan a wide range with \n\t%bautoenum -r <IP address>/<network mask>%b\n" "${YELLOW}" "${RED}" "${YELLOW}" "${BLUE}" "${RESTORE}" 
+    printf "%b[!] CIDR range %bNOT%b detected. Remember you can also pass a range in CIDR notation to use enum tools that scan a wide range with '%bautoenum -r <IP address>/<network mask>%b'%b\n" "${YELLOW}" "${RED}" "${YELLOW}" "${BLUE}" "${YELLOW}" "${RESTORE}" 
   fi
 }
 
@@ -211,9 +217,9 @@ ports_iterator() {
   
   # Only look once for the wordlists
   dir_list_medium=$(locate "directory-list-2.3-medium.txt" -l 1) && \
-    printf "%b[+] Found directory wordlist for web fuzzers.\n\tUsing '%b%s%b%s'\n" "${GREEN}" "${YELLOW}" "${dir_list_medium}" "${GREEN}" "${RESTORE}"
+    printf "%b[+] Found directory wordlist for web fuzzers.\n\tUsing '%b%s%b'%b\n" "${GREEN}" "${YELLOW}" "${dir_list_medium}" "${GREEN}" "${RESTORE}"
   darkweb_top1000=$(locate "darkweb2017-top1000.txt" -l 1) && \
-    printf "%b[+] Found passwords wordlist for password sprayers.\n\tUsing '%b%s%b%s'\n" "${GREEN}" "${YELLOW}" "${darkweb_top1000}" "${GREEN}" "${RESTORE}" 
+    printf "%b[+] Found passwords wordlist for password sprayers.\n\tUsing '%b%s%b'%b'\n" "${GREEN}" "${YELLOW}" "${darkweb_top1000}" "${GREEN}" "${RESTORE}" 
 
   # Iterate over each port in the array
   for port in "${PORTS_ARRAY[@]}"; do ## TODO: convert array to POSIX
@@ -329,9 +335,15 @@ ports_iterator() {
         finished_tool "Nmap scripts for SSH" "${1}" "${dir}ssh_enum.nmap" &
       # TODO: add hydra and try to force a low hanging fruit list
       ;;
+    # ---------- FTP ----------
     21)
       nmap -p21 "${1}" --script "ftp-*" -oN "${dir}ftp_enum" -v >> "${dir}"ftp_tailable_nmap_scan.out 2>&1 && \
         finished_tool "Nmap scripts for FTP" "${1}" "${dir}ftp_enum.nmap" &
+      ;;
+    # ---------- NFS ----------
+    2049)
+      nmap -p21 "${1}" --script "nfs-ls,nfs-showmount,nfs-statfs" -oN "${dir}ftp_enum" -v >> "${dir}"ftp_tailable_nmap_scan.out 2>&1 && \
+        finished_tool "Nmap scripts for NFS" "${1}" "${dir}ftp_enum.nmap" &
       ;;
       # To add:
       #   - SQL
@@ -351,11 +363,11 @@ ports_iterator() {
 # ---------- Let the fun begin! MAIN Function ----------
 
 main() {
-  print_phase 1
+  if [ "$verbose" -eq 1 ]; then print_phase 1; fi
   # Perform CIDR enumeration first, check if CIDR argument was passed
   cidr_enumeration "${DIR}"
   
-  print_phase 2
+  if [ "$verbose" -eq 1 ]; then print_phase 2; fi
   # Check whether input is a single or multiple target and loop accordingly
   if [[ ! -f "$IP" ]]; then 
     # ---------- Single target ----------
@@ -377,7 +389,7 @@ main() {
       exit 1
     fi
 
-    print_phase 3
+    if [ "$verbose" -eq 1 ]; then print_phase 3; fi
     # If still alive, proceed with nmap scan and ports iterator
     aggressive_scan "${IP}" "${dir}"
 
@@ -389,7 +401,7 @@ main() {
 
     # loop through the targets and assign vars accordingly
     line=1
-    print_phase 3
+    if [ "$verbose" -eq 1 ]; then print_phase 3; fi
     while [ "$line" -le "$list_total_lines" ]; do
       target=$(sed "${line}q;d" "$IP" 2>/dev/null)
       # target_number="_target_${line}"
@@ -430,10 +442,8 @@ main() {
 # ---------- Script checks, ensuring everything is ready to run ----------
 
 # Check 0: Launch fancy (Bruce) Banner! 
-print_hulk
-# Ba-dum-tss!
-
-print_phase 0
+if [ "$quiet" -eq 0 ]; then print_hulk; fi # Ba-dum-tss!
+if [ "$verbose" -eq 1 ]; then print_phase 0; fi
 
 # Check 1: help flag passed?
 if [ -n "$do_help" ]; then
@@ -481,7 +491,7 @@ fi
 printf "%b[+] Using '%b%s%b' as base directory where to save the output files%b\n" "${GREEN}" "${RESTORE}" "${DIR}" "${GREEN}" "${RESTORE}"
 
 
-# ---------- Preliminary checks completed. Starting engines calling main function ----------
+# ---------- Preliminary checks completed. Starting engines! Calling main function ----------
 
 # Let there be (~l~i~g~h~t~) enumeration.
 main
@@ -489,8 +499,8 @@ main
 # ---------- Finish script and wait for tools to finish on the background ----------
 
 # Finished. Getting timing score
-print_phase 4
+if [ "$verbose" -eq 1 ]; then print_phase 4; fi
 END="$(date +%s)"
 runtime="$((END - START))"
-printf "%b[*] All done! It only took '%b%s seconds%b' to run autoEnum based on your settings!! Please allow your tools some time to finish. \n\tIf you want to see what they are doing, run %b'tail -f %s/<IP Address>/<output file>'%b\n" "${BLUE}" "${GREEN}" "$runtime" "${BLUE}" "${YELLOW}" "${DIR}" "${RESTORE}"
+printf "%b[*] All done! It only took '%b%s seconds%b' to run autoEnum based on your settings!! Please allow your tools some time to finish.%b" "${BLUE}" "${GREEN}" "$runtime" "${BLUE}" "${RESTORE}"
 printf "\n\n%b[*] %s" "${BLUE}" "This tool is still in its early days. Do you have any feedback? Please feel free to reach out: https://github.com/0x5ubt13"
