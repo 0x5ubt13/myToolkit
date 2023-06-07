@@ -39,10 +39,10 @@ shift $((OPTIND-1))
 usage() {
   printf "\n%bUsage: %b%s [OPTIONS] <Single target's IP/Targets file>\n" "${GREEN}" "${RESTORE}" "$(basename "$0")"
   printf "%b\t-h :%b Help      - Display this help and exit.\n" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-v :%b Verbose   - Increase verbosity of the script.\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-v :%b Verbose   - Increase verbosity of the script. Recommended!\n" "${YELLOW}" "${RESTORE}"
   printf "%b\t-q :%b Quiet     - Don't print the cool banner.\n" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-r :%b Range     - Specify a CIDR range to use tools for whole subnets.\n" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-t :%b Top ports - Run port sweep with nmap and the flag --top-ports=<your input>\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-r :%b Range     - Specify a CIDR range to use tools for whole subnets.\n" "${YELLOW}" "${RESTORE}" 
+  printf "%b\t-t :%b Top ports - Run port sweep with nmap and the flag %b--top-ports=%b<your input>\n" "${YELLOW}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
   printf "%b\t-d :%b DNS       - Specify custom DNS servers. Default option: %b-n%b.\n" "${YELLOW}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
   printf "%b\nExamples:\n\t%s 192.168.142.93\n\t%s %b-v%b 192.168.142.93\n\t%s 10.129.121.60 %b-d%b <serv1[,serv2],...>\n\t%s 10.129.121.60 %b-r%b 10.129.121.0/24\n\t%s targets_file.txt %b-r%b 10.10.8.0/24%b" "${GREEN}" "$(basename "$0")" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "${RESTORE}"
   exit 1
@@ -96,11 +96,11 @@ print_phase() {
 
 print_hulk() {
   printf "
-%b              _____      %b__________                         
-%b______ ____  ___  /_______%b__  ____/__________  ________ ___ 
-%b_  __ \`/  / / /  __/  __ \\%b_  __/  __  __ \\  / / /_  __ \`__ \\
-%b/ /_/ // /_/ // /_ / /_/ /%b  /___  _  / / / /_/ /_  / / / / /
-%b\__,_/ \\__,_/ \\__/ \\____/%b/_____/  /_/ /_/\\__,_/ /_/ /_/ /_/ 
+%b             _____      %b__________                         
+%b______ ____ ___  /_______%b__  ____/_________  ________ ___ 
+%b_  __ \` / / / /  __/  __ \\%b_  __/ __  __ \\  / / /_  __ \`__ \\
+%b/ /_/ // /_/ // /_ / /_/ /%b  /___ _  / / / /_/ /_  / / / / /
+%b\__,_/ \\__,_/ \\__/ \\____/%b/_____/ /_/ /_/\\__,_/ /_/ /_/ /_/ 
 %b                    by 0x5ubt13                               \n%b                                            
 " "${YELLOW}" "${RED}" "${YELLOW}" "${RED}" "${YELLOW}" "${RED}" "${YELLOW}" "${RED}" "${YELLOW}" "${RED}" "${GREEN}" "${RESTORE}"
 
@@ -113,57 +113,65 @@ ports_sweep() {
   # First arg target IP, second arg dir
   if [ -n "$dnsServers" ]; then
     # Nmap ports sweep with --dns-servers
-    printf "%b[+]%b -d%b flag detected. Running nmap port sweep with custom DNS servers: %s .%b\n" "${GREEN}" "${YELLOW}" "${GREEN}" "${dnsServers}" "${RESTORE}"
+    if [ "$verbose" -eq 1 ]; then 
+      printf "%b[+]%b -d%b flag detected. Running nmap port sweep with custom DNS servers: %s .%b\n" "${GREEN}" "${YELLOW}" "${GREEN}" "${dnsServers}" "${RESTORE}"
+    fi
     if [ -n "$top" ]; then
         # Nmap ports sweep with --top-ports=<${top}>
-        printf "%b[+]%b -t%b flag also detected. Running nmap port sweep with --top-ports=%s .%b\n" "${GREEN}" "${YELLOW}" "${GREEN}" "${top}" "${RESTORE}"
-        printf "%b[+] Starting nmap SYN port discovery scan against %b'%s'%b...\n" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"
+        if [ "$verbose" -eq 1 ]; then 
+          printf "%b[+]%b -t%b flag also detected. Running nmap port sweep with --top-ports=%s .%b\n" "${GREEN}" "${YELLOW}" "${GREEN}" "${top}" "${RESTORE}"
+          printf "%b[+] Starting nmap SYN port discovery scan against %b'%s'%b...\n" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"
+        fi
         ports=$(nmap --min-rate=2000 "$dnsServers" -sS -p- -T4 --top-ports="${top}" "$ping" "$1" 2>/dev/null | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
     else
-        printf "%b[+] Starting nmap SYN port discovery scan against %b'%s'%b...\n" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"
+        if [ "$verbose" -eq 1 ]; then printf "%b[+] Starting nmap SYN port discovery scan against %b'%s'%b...\n" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"; fi
         ports=$(nmap --min-rate=2000 "$dnsServers" -sS -p- -T4 "$ping" "$1" 2>/dev/null | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
     fi
   else
     dnsServers="-n"
     if [ -n "$top" ]; then
       # Nmap ports sweep with --top-ports=<${top}>
-      printf "%b[+]%b -t%b flag detected. Running nmap port sweep with --top-ports=%s .%b\n" "${GREEN}" "${YELLOW}" "${GREEN}" "${top}" "${RESTORE}"
-      printf "%b[+] Starting nmap SYN port discovery scan against %b'%s'%b...\n" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"
+      if [ "$verbose" -eq 1 ]; then 
+        printf "%b[+]%b -t%b flag detected. Running nmap port sweep with --top-ports=%s .%b\n" "${GREEN}" "${YELLOW}" "${GREEN}" "${top}" "${RESTORE}"
+        printf "%b[+] Starting nmap SYN port discovery scan against %b'%s'%b...\n" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"
+      fi
       ports=$(nmap --min-rate=2000 "$dnsServers" -sS -p- -T4 --top-ports="${top}" "$ping" "$1" 2>/dev/null | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
     else
       rustscan_check=$(locate "/bin/rustscan" -l 1)
       if [ -n "$rustscan_check" ]; then
         # Rustscan ports sweep
         printf "%b[+] %bRustscan%b found, proceeding to sweep ports with Rustscan%b" "${GREEN}" "${BLUE}" "${GREEN}" "${RESTORE}"
-        printf "\n%b[!] Starting %bRustscan's%b SYN port discovery scan against %b'%s'%b, please bear with...\n" "${YELLOW}" "${BLUE}" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"
+        if [ "$verbose" -eq 1 ]; then printf "\n%b[!] Starting %bRustscan's%b SYN port discovery scan against %b'%s'%b, please bear with...\n" "${YELLOW}" "${BLUE}" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"; fi
         ports="$(rustscan -a "$IP" "$dnsServers" --ulimit 5000 -g | cut -d ' ' -f 3 | sed 's/[^[:alnum:],\t]//g')"
       else
         # Nmap ports sweep
-        printf "%b[-] Rustscan not installed, using nmap -p- as a default for port sweeping.%b" "${YELLOW}" "${RESTORE}"
-        printf "\n${YELLOW}[+] Starting nmap SYN port discovery scan against ${RESTORE}'%s'${YELLOW}...\n" "$1"
+        printf "%b[-] Rustscan not installed, using nmap -p- as a default for port sweeping. Please consider running the installation script.%b" "${YELLOW}" "${RESTORE}"
+        if [ "$verbose" -eq 1 ]; then printf "\n${YELLOW}[+] Starting nmap SYN port discovery scan against ${RESTORE}'%s'${YELLOW}...\n" "$1"; fi
         ports=$(nmap --min-rate=2000 -sS -p- -T5 "$ping" "$1" 2>/dev/null | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
       fi
     fi
   fi
   
-  # Check there are ports in the var
+  # Check whether there are ports in the var
   if [ -z "$ports" ]; then
     sweep_result=1
   else
-    sweep_result=0 # Needed to check later on to avoid throwing an "illegal number" error
+    sweep_result=0
     echo "$ports" > "${2}"open_ports.txt
-    printf "%b[+] Done! Found open ports on target.\n\tOpen ports in %b'%s'%b: %b%s\n%b[*] Saved as '%b%sopen_ports.txt%b' in nmap-friendly format.%b\n" "${GREEN}" "${RESTORE}" "${1}" "${GREEN}" "${RESTORE}" "${ports}" "${BLUE}" "${RESTORE}" "${2}" "${BLUE}" "${RESTORE}"
+    printf "%b[+] Done! Found open ports on target.\n\tOpen ports in %b'%s'%b: %b%s\n%b[+] Saved as '%b%sopen_ports.txt%b' in nmap-friendly format.%b\n" "${GREEN}" "${RESTORE}" "${1}" "${GREEN}" "${RESTORE}" "${ports}" "${GREEN}" "${RESTORE}" "${2}" "${GREEN}" "${RESTORE}"
   fi   
 }
 
 # Proceed with an aggressive scan
 aggressive_scan() {
   # First arg IP, second arg directory
-  printf "%b[!] Starting %bmain aggressive nmap scan%b against %b'%s'%b and sending it to the background.\n%b" "${YELLOW}" "${BLUE}" "${YELLOW}" "${RESTORE}" "${1}" "${YELLOW}" "${RESTORE}"
-  printf "%b[!] Running '%bnmap -A -v %s --script=vuln -oA %snmap_scan -p%s %s --stats-every 15s &%b'.\n\tShortcut: '%btail -f %snmap_tailable_progress.out%b'%b\n" "${YELLOW}" "${RESTORE}" "${ping}" "${2}" "${ports}" "${1}" "${YELLOW}" "${RESTORE}" "${2}" "${YELLOW}" "${RESTORE}"
+  if [ "$verbose" -eq 1 ]; then 
+    printf "%b[!] Starting %bmain aggressive vuln nmap scan%b against %b'%s'%b and sending it to the background.\n%b" "${YELLOW}" "${BLUE}" "${YELLOW}" "${RESTORE}" "${1}" "${YELLOW}" "${RESTORE}"
+    printf "%b[!] Running '%bnmap -A -v %s --script=vuln -oA %snmap_scan -p%s %s --stats-every 15s &%b'.\n\tShortcut: '%btail -f %snmap_tailable_progress.out%b'%b\n" "${YELLOW}" "${RESTORE}" "${ping}" "${2}" "${ports}" "${1}" "${YELLOW}" "${RESTORE}" "${2}" "${YELLOW}" "${RESTORE}"
+  fi
   printf "%b[+] Saving output to %b%snmap_scan.out %bin all formats.%b\n\n" "${GREEN}" "${RESTORE}" "${2}" "${GREEN}" "${RESTORE}"
   
-  nmap "${1}" -v -A "$ping" --script=vuln -oA "${2}nmap_scan" -p"$ports" --stats-every 15s >> "${2}"nmap_tailable_progress.out && \
+  nmap "${1}" -A -v "$ping" --script=vuln -oA "${2}nmap_scan" -p"$ports" >> "${2}"nmap_tailable_progress.out 2>&1 && \
     xsltproc "${2}nmap_scan.xml" -o "${2}nmap_scan.html" && \
     finished_tool "Main aggressive nmap scan" "${1}" "${2}nmap_scan.nmap" && \
     printf "%b[+] Successfully generated HTML report of the Nmap scan, available at '%b%s%b'.%b\n" "${GREEN}" "${RESTORE}" "${2}nmap_scan.html" "${GREEN}" "${RESTORE}" &
@@ -189,17 +197,17 @@ cidr_enumeration() {
     mkdir "${cidr_dir}"
     
     # Run range tools
-    printf "%b[+]%b -c%b flag detected. Proceeding to scan CIDR range with dedicated range enumeration tools.\n%b" "${GREEN}" "${YELLOW}" "${GREEN}" "${RESTORE}"
+    if [ "$verbose" -eq 1 ]; then printf "%b[+]%b -c%b flag detected. Proceeding to scan CIDR range with dedicated range enumeration tools.\n%b" "${GREEN}" "${YELLOW}" "${GREEN}" "${RESTORE}"; fi
     
-    running_tool "nbtscan-unixwiz" 
+    if [ "$verbose" -eq 1 ]; then running_tool "nbtscan-unixwiz"; fi 
     nbtscan-unixwiz -f "$cidr" >> "${cidr_dir}"nbtscan-unixwiz.out 2>&1 && \
       finished_tool "nbtscan-unixwiz" "$cidr" "${cidr_dir}nbtscan-unixwiz.out" &
     
-    running_tool "Responder-RunFinger"
+    if [ "$verbose" -eq 1 ]; then running_tool "Responder-RunFinger"; fi
     responder-RunFinger -i "$cidr" >> "${cidr_dir}"runfinger.out 2>&1 && \
       finished_tool "responder-RunFinger" "$cidr" "${cidr_dir}runfinger.out" &
     
-    running_tool "onesixtyone"
+    if [ "$verbose" -eq 1 ]; then running_tool "onesixtyone"; fi
     onesixtyone -c /usr/share/legion/wordlists/snmp-default.txt "$cidr" -o "${cidr_dir}"onesixtyone.out -w 100 >> "${cidr_dir}"onesixtyone_tailable.out 2>&1 && \
       finished_tool "onesixtyone" "$cidr" "${cidr_dir}onesixtyone.out" &
   else
@@ -208,7 +216,7 @@ cidr_enumeration() {
 }
 
 # Core functionality of this script: iterate through each port and automate launching tools
-ports_iterator() {
+rpc+_ports_iterator() {
   # First arg target IP, second arg dir to save output
   dir="${2}"
   
@@ -216,143 +224,181 @@ ports_iterator() {
   IFS=',' read -ra PORTS_ARRAY <<< "$ports" ## TODO: convert Here-Strings to POSIX
   
   # Only look once for the wordlists
+  if [ "$verbose" -eq 1 ]; then
   dir_list_medium=$(locate "directory-list-2.3-medium.txt" -l 1) && \
     printf "%b[+] Found directory wordlist for web fuzzers.\n\tUsing '%b%s%b'%b\n" "${GREEN}" "${YELLOW}" "${dir_list_medium}" "${GREEN}" "${RESTORE}"
   darkweb_top1000=$(locate "darkweb2017-top1000.txt" -l 1) && \
-    printf "%b[+] Found passwords wordlist for password sprayers.\n\tUsing '%b%s%b'%b'\n" "${GREEN}" "${YELLOW}" "${darkweb_top1000}" "${GREEN}" "${RESTORE}" 
-
+    printf "%b[+] Found passwords wordlist for password sprayers.\n\tUsing '%b%s%b'%b'\n\n" "${GREEN}" "${YELLOW}" "${darkweb_top1000}" "${GREEN}" "${RESTORE}" 
+  else
+    dir_list_medium=$(locate "directory-list-2.3-medium.txt" -l 1)
+    darkweb_top1000=$(locate "darkweb2017-top1000.txt" -l 1)
+  fi
   # Iterate over each port in the array
   for port in "${PORTS_ARRAY[@]}"; do ## TODO: convert array to POSIX
     # Use a case statement to perform different actions for each port
     case $port in
-    # ---------- SMTP ----------
+    21)
+      printf "%b[+] FTP service detected. Running FTP nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
+
+      if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for FTP"; fi
+      nmap -sV -n -Pn -p21 "${1}" --script "ftp-* and not brute" -oN "${dir}ftp_enum.nmap" -v >> "${dir}"ftp_tailable_nmap_scan.out 2>&1 && \
+        finished_tool "Nmap scripts for FTP" "${1}" "${dir}ftp_enum.nmap" &
+      # TODO: add hydra and try to force a list of low-hanging fruit user+pass
+      ;;
+    22) 
+      printf "%b[+] SSH service detected. Running SSH nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
+      
+      if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for SSH"; fi
+      nmap -sV -n -Pn -p22 "${1}" --script "ssh* and not brute" -oN "${dir}ssh_enum.nmap" -v >> "${dir}"ssh_tailable_nmap_scan.out 2>&1 && \
+        finished_tool "Nmap scripts for SSH" "${1}" "${dir}ssh_enum.nmap" &
+      # TODO: add hydra and try to force a list of low-hanging fruit user+pass
+      ;;
     25|465|587) 
-      # SMTP enumeration. Just run once for now.
+      # Just run once for now.
       if [ ! -f "${dir}smtp_tailable_nmap_scan.nmap" ]; then
         printf "%b[+] Running SMTP enum tools in port %s%b\n" "${GREEN}" "${port}" "${RESTORE}" 
-        nmap -p"$port" --script=smtp-commands,smtp-enum-users,smtp-open-relay "$1" -v -oA snmp-enum >> "${dir}"smtp_tailable_nmap_scan.out 2>&1 && \
-          finished_tool "Nmap for SMTP" "${1}" "${dir}snmp-enum.nmap" &
+
+        if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for SMTP"; fi
+        nmap -sV -n -Pn -p"$port" --script=smtp-commands,smtp-enum-users,smtp-open-relay "$1" -v -oN snmp-enum.nmap >> "${dir}"smtp_tailable_nmap_scan.out 2>&1 && \
+          finished_tool "Nmap scripts for SMTP" "${1}" "${dir}snmp-enum.nmap" &
       fi
       ;;
-    # ---------- Web ----------
     80)
       # Common Web without TLS 
       printf "%b[+] Running Web enum tools in port 80%b\n" "${GREEN}" "${RESTORE}"
 
-      running_tool "Nikto on port 80"
+      if [ "$verbose" -eq 1 ]; then running_tool "Nikto on port 80"; fi
       nikto -host "${1}" >> "${dir}"nikto_tailable_80.out 2>&1 && \
         finished_tool "Nikto" "${1}" "${dir}nikto_80.out" &
       
       # ffuf killswitch activated after 5 mins of running to save energy and avoid dangling processes consuming CPU
-      running_tool "ffuf on port 80"
-      ffuf -u http://"${1}":80/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 >> "${dir}"ffuf_80_tailable.out 2>&1 && \
-        finished_tool "ffuf" "${1}" "${dir}ffuf_tailable_80.out" &
-      
+      if [ -n "$dir_list_medium" ]; then
+        if [ "$verbose" -eq 1 ]; then running_tool "ffuf on port 80"; fi
+        ffuf -u http://"${1}":80/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 >> "${dir}"ffuf_80_tailable.out 2>&1 && \
+          finished_tool "ffuf" "${1}" "${dir}ffuf_tailable_80.out" &
+      else
+        printf "%b[-] Error: %bmedium directory wordlist not found. Aborting web fuzzing on port 80." "${RED}" "${RESTORE}"
+      fi
       wp_enumeration "${1}" "80" "${dir}"
+      ;;
+    111)
+      printf "%b[+] RPC service detected. Running RPC nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
+      
+      if [ "$verbose" -eq 1 ]; then running_tool "Nmap for RPC on UDP"; fi
+      nmap -n -Pn -sVC -p 111 -sU "${1}" -oN "${dir}"rpc_nmap_udp_scan.nmap >> "${dir}rpc_udp_tailable_nmap_scan" 2>&1 && \
+        finished_tool "Nmap for RPC on UDP" "${1}" "${dir}rpc_udp_nmap_scan.nmap" &
+      ;;
+    137|138|139|445)
+      # Run only once
+      if [ "$nb_checked" -eq 0 ]; then
+        nb_checked=1
+        printf "%b[+] NetBIOS/SMB detected. Running NB/SMB enum tools.%b\n" "${GREEN}" "${RESTORE}"
+        
+        if [ "$verbose" -eq 1 ]; then running_tool "CrackMapExec"; fi
+        crackmapexec smb "${1}" --shares -u '' -p '' --shares --sessions --disks --loggedon-users --users --groups --computers --local-groups --pass-pol --rid-brute >> "${dir}"cme_anon.out 2>&1 && \
+          finished_tool "CrackMapExec" "${1}" "${dir}cme_anon.out" &
+        
+        if [ "$verbose" -eq 1 ]; then running_tool "SMBMap"; fi
+        smbmap -H "${1}" >> "${dir}"smbmap_anon.out 2>&1 && \
+          finished_tool "SMBMap" "${1}" "${dir}smbmap_anon.out" &
+  
+        if [ "$verbose" -eq 1 ]; then running_tool "NBLookup"; fi
+        nmblookup -A "${1}" >> "$dir"nmblookup.out 2>&1 && \
+          finished_tool "NMBLookup" "${1}" "${dir}nmblookup.out" &
+    
+        if [ "$verbose" -eq 1 ]; then running_tool "enum4linux"; fi
+        enum4linux -u '' -p '' "${1}" >> "$dir"enum4linux_anon.out 2>&1 && \
+          finished_tool "enum4linux" "${1}" "$dir"enum4linux_anon.out & 
+
+        if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for NB/SMB"; fi
+        nmap -Pn -sUV -p137 -n -sV --script "nbstat.nse" "${1}" -v -oN "${dir}nb_udp_enum.nmap" >> "${dir}"nb_udp_tailable_nmap_scan.out 2>&1 &&
+          finished_tool "Nmap scripts for NetBios" "${1}" "${dir}nb_enum.nmap" &
+        nmap -Pn -p139,445 -n -sV --script "smb* and not brute" "${1}" -v -oN "${dir}smb_enum.nmap" >> "${dir}"smb_tailable_nmap_scan.out 2>&1 && \
+          finished_tool "Nmap scripts for SMB" "${1}" "${dir}smb_enum.nmap" &
+      fi
       ;;
     443)
       # Common Web 
       printf "%b[+] Running Web enum tools in port 443%b\n" "${GREEN}" "${RESTORE}"
 
-      running_tool "Nikto"
+      if [ "$verbose" -eq 1 ]; then running_tool "Nikto"; fi
       nikto -host "${1}" >> "${dir}"nikto_tailable_443.out 2>&1 && \
         finished_tool "Nikto on port 443" "${1}" "${dir}nikto_tailable_443.out" &
 
       # ffuf killswitch activated after 5 mins of running to save energy and avoid dangling processes consuming CPU
-      running_tool "ffuf on port 443"
-      ffuf -u https://"${1}":443/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 >> "${dir}"ffuf_443_tailable.out 2>&1 && \
-        finished_tool "ffuf on port 443" "${1}" "${dir}ffuf_tailable_443.out" &
-      
+      if [ -z "$dir_list_medium" ]; then
+        if [ "$verbose" -eq 1 ]; then running_tool "ffuf on port 443"; fi
+        ffuf -u https://"${1}":443/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 >> "${dir}"ffuf_443_tailable.out 2>&1 && \
+          finished_tool "ffuf on port 443" "${1}" "${dir}ffuf_tailable_443.out" &
+      else
+        printf "%b[-] Error: %bmedium directory wordlist not found. Aborting web fuzzing on port 443." "${RED}" "${RESTORE}"
+      fi
       wp_enumeration "${1}" "443" "${dir}"
       ;;
-    8080) 
-      # Try enumerate Services on 8080 
-      wp_enumeration "${1}" "8080" "${dir}" 
-
-      tomcat_version=$(curl -s -X GET http://"${IP}":8080/docs/ | grep -i 'Tomcat')
-      if [ -n "$tomcat_version" ]; then
-        printf "%b[+] Web service Tomcat detected. Running Tomcat enum tools%b\n" "${GREEN}" "${RESTORE}"
-  
-        running_tool "gobuster"
-        gobuster -z -q dir -e -u "${1}":8080 -w "$dir_list_medium" >> "${dir}"gobuster_tomcat.out 2>&1 && \
-          finished_tool "gobuster on port 8080" "${1}" "${dir}gobuster_tomcat.out" &
-        
-        running_tool "hydra"
-        hydra -L users.txt -P "$darkweb_top1000" -f "${1}" http-get /manager/html >> "${dir}"hydra_tailable.out 2>&1 && \
-          finished_tool "Hydra" "${1}" "${dir}hydra_tailable.out" &
-      fi
-      ;;
-    # ---------- RPC ----------
-    111)
-      # Enumerate RPC
-      printf "%b[+] RPC service detected. Running RPC nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
-      nmap -p 111 --script "nfs*" "${1}" -oA "${dir}"rpc_nmap_scan >> rpc_tailable_nmap_scan 2>&1 && \
-        finished_tool "Nmap against RPC on port 111" "${1}" "${dir}rpc_nmap_scan.nmap" &
-      
-      running_tool "RPCclient"
-      rpcclient -U "" "${1}" >> "${dir}"rpcclient_anon.out 2>&1 && \
-        finished_tool "RPCclient" "${1}" "${dir}rpcclient_anon.out" &
-      ;;
-    # ---------- NetBios / SMB ----------
-    139|445)
-      # Enumerate NB/SMB. Run only once
-      if [ "$nb_checked" -eq 0 ]; then
-        nb_checked=1
-        printf "%b[+] NetBIOS/SMB detected. Running SMB enum tools%b\n" "${GREEN}" "${RESTORE}"
-        
-        running_tool "SMBMap"
-        smbmap -H "${1}" >> "${dir}"smbmap_anon.out 2>&1 && \
-          finished_tool "SMBMap" "${1}" "${dir}smbmap_anon.out" &
-  
-        running_tool "NBLookup"
-        nmblookup -A "${1}" >> "$dir"nmblookup.out 2>&1 && \
-          finished_tool "NMBLookup" "${1}" "${dir}nmblookup.out" &
-    
-        running_tool "enum4linux"
-        enum4linux -u '' -p '' "${1}" >> "$dir"enum4linux_anon.out 2>&1 && \
-          finished_tool "enum4linux" "${1}" "${dir}enum4linux_anon.out" &
-      fi
-      ;;
-    # ---------- LDAP ----------
     389|636|3268|3269)
       # Run only once
       if [ "$ldap_checked" -eq 0 ]; then
         ldap_checked=1
         printf "%b[+] Running LDAP enum tools in port %s%b\n" "${GREEN}" "${port}" "${RESTORE}" 
         
-        running_tool "ldapsearch (null credentials attack)"
+        if [ "$verbose" -eq 1 ]; then running_tool "ldapsearch (null credentials attack)"; fi
         ldapsearch -x -H ldap://"${1}" -D '' -w '' -b "DC=<1_SUBDOMAIN>,DC=<TLD>" >> "${dir}"ldapsearch.out 2>&1 && \
           finished_tool "ldapsearch" "${1}" "${dir}ldapsearch.out" &
         
-        running_tool "Nmap for LDAP"
-        nmap -p"$port" -n -sV --script "ldap* and not brute" "${1}" -v -oA ldap_enum >> "${dir}"ldap_tailable_nmap_scan.out 2>&1 && \
-          finished_tool "Nmap for LDAP" "${1}" "${dir}ldap_enum.nmap" &
+        if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for LDAP"; fi
+        nmap -Pn -p"$port" -n -sV --script "ldap* and not brute" "${1}" -v -oN ldap_enum.nmap >> "${dir}"ldap_tailable_nmap_scan.out 2>&1 && \
+          finished_tool "Nmap scripts for LDAP" "${1}" "${dir}ldap_enum.nmap" &
       fi
       ;;
-    # ---------- SSH ----------
-    22)
-      nmap -p22 "${1}" --script "ssh*" -oN "${dir}ssh_enum" -v >> "${dir}"ssh_tailable_nmap_scan.out 2>&1 && \
-        finished_tool "Nmap scripts for SSH" "${1}" "${dir}ssh_enum.nmap" &
-      # TODO: add hydra and try to force a low hanging fruit list
-      ;;
-    # ---------- FTP ----------
-    21)
-      nmap -p21 "${1}" --script "ftp-*" -oN "${dir}ftp_enum" -v >> "${dir}"ftp_tailable_nmap_scan.out 2>&1 && \
-        finished_tool "Nmap scripts for FTP" "${1}" "${dir}ftp_enum.nmap" &
-      ;;
-    # ---------- NFS ----------
     2049)
-      nmap -p21 "${1}" --script "nfs-ls,nfs-showmount,nfs-statfs" -oN "${dir}ftp_enum" -v >> "${dir}"ftp_tailable_nmap_scan.out 2>&1 && \
+      if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for NFS"; fi
+      nmap -sV -n -Pn -p2049,111 "${1}" --script "nfs-ls,nfs-showmount,nfs-statfs" -oN "${dir}ftp_enum.nmap" -v >> "${dir}"ftp_tailable_nmap_scan.out 2>&1 && \
         finished_tool "Nmap scripts for NFS" "${1}" "${dir}ftp_enum.nmap" &
       ;;
+    8080) 
+      wp_enumeration "${1}" "8080" "${dir}" 
+
+      tomcat_version=$(curl -s -X GET http://"${IP}":8080/docs/ | grep -i 'Tomcat')
+      if [ -n "$tomcat_version" ]; then
+        printf "%b[+] Web service Tomcat detected. Running Tomcat enum tools%b\n" "${GREEN}" "${RESTORE}"
+  
+        if [ -n "$dir_list_medium" ]; then
+          if [ "$verbose" -eq 1 ]; then running_tool "gobuster"; fi
+          gobuster -z -q dir -e -u "${1}":8080 -w "$dir_list_medium" >> "${dir}"gobuster_tomcat.out 2>&1 && \
+            finished_tool "gobuster on port 8080" "${1}" "${dir}gobuster_tomcat.out" &
+        else
+        printf "%b[-] Error: %bmedium directory wordlist not found. Aborting web fuzzing on port 8080." "${RED}" "${RESTORE}"
+        fi
+        if [ -n "$darkweb_top1000" ]; then
+          if [ "$verbose" -eq 1 ]; then running_tool "hydra"; fi
+          hydra -L users.txt -P "$darkweb_top1000" -f "${1}" http-get /manager/html >> "${dir}"hydra_tailable.out 2>&1 && \
+            finished_tool "Hydra" "${1}" "${dir}hydra_tailable.out" &
+        else
+        printf "%b[-] Error: %bdarkweb_top1000 wordlist not found. Aborting bruteforcing with hydra on port 8080." "${RED}" "${RESTORE}"
+        fi
+      fi
+      ;;
+      # 512)
+      #  hydra
+      #  ;;
+      # 513)
+      #  hydra  
+      #  ;;
+      # 514)
+      #  hydra
+      #  ;;
+      # 554|8554)
+      #  hydra
+      #  ;;
+      # 1521)
+      #  tool x
+      #  ;;
       # To add:
       #   - SQL
-      #   - TNS (1521)
-      #   - rexec, rsh and rlogin -> hydra (512, 513, 514)
       #   - rsync (873)
       #   - rtsp -> hydra (554, 8554)
     *)
-      printf "%b[-]%b Port %b%s%b detected, but functionality to enumerate it has not been implemented yet.\n" "${RED}" "${RESTORE}" "${YELLOW}" "$port" "${RESTORE}"
+      if [ "$verbose" -eq 1 ]; then printf "%b[-]%b Port %b%s%b detected, but I don't know how to handle it. Please check the %bmain Nmap%b scan.\n" "${RED}" "${RESTORE}" "${YELLOW}" "$port" "${RESTORE}" "${BLUE}" "${RESTORE}"; fi
       ;;
     esac
   done
@@ -389,8 +435,8 @@ main() {
       exit 1
     fi
 
+    # If still alive, proceed with full nmap scan and ports iterator
     if [ "$verbose" -eq 1 ]; then print_phase 3; fi
-    # If still alive, proceed with nmap scan and ports iterator
     aggressive_scan "${IP}" "${dir}"
 
     # Iterate over each port in the array
@@ -447,8 +493,8 @@ if [ "$verbose" -eq 1 ]; then print_phase 0; fi
 
 # Check 1: help flag passed?
 if [ -n "$do_help" ]; then
-    printf "%b[*] Help flag detected. Aborting other cheks and printing usage.\n%b" "${BLUE}" "${RESTORE}"
-    usage
+  printf "%b[*] Help flag detected. Aborting other cheks and printing usage.\n%b" "${BLUE}" "${RESTORE}"
+  usage
 fi
 
 # Check 2: Ensure there is a target
@@ -484,8 +530,9 @@ fi
 
 # Check 5: locate exists in the system
 updatedb_check=$(which updatedb)
+# TODO: Remove this requisite for the containerised version of the script
 if [ -z "$updatedb_check" ]; then
-  error_msg "AutoEnum needs \"locate\" to be installed. Please see or run \"install_requisites.sh\""
+  error_msg "AutoEnum needs \"locate\" to be installed. Please see or run \"install_requisites.sh\", or manually install \"locate\""
 fi
 
 printf "%b[+] Using '%b%s%b' as base directory where to save the output files%b\n" "${GREEN}" "${RESTORE}" "${DIR}" "${GREEN}" "${RESTORE}"
