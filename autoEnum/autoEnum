@@ -140,7 +140,7 @@ ports_sweep() {
       rustscan_check=$(locate "/bin/rustscan" -l 1)
       if [ -n "$rustscan_check" ]; then
         # Rustscan ports sweep
-        printf "%b[+] %bRustscan%b found, proceeding to sweep ports with Rustscan%b" "${GREEN}" "${BLUE}" "${GREEN}" "${RESTORE}"
+        printf "%b[+] %bRustscan%b found, proceeding to sweep ports with Rustscan%b\n" "${GREEN}" "${BLUE}" "${GREEN}" "${RESTORE}"
         if [ "$verbose" -eq 1 ]; then printf "\n%b[!] Starting %bRustscan's%b SYN port discovery scan against %b'%s'%b, please bear with...\n" "${YELLOW}" "${BLUE}" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"; fi
         ports="$(rustscan -a "$IP" "$dnsServers" --ulimit 5000 -g | cut -d ' ' -f 3 | sed 's/[^[:alnum:],\t]//g')"
       else
@@ -193,23 +193,24 @@ cidr_enumeration() {
   # First arg target CIDR, second arg dir
   if [ -n "$cidr" ]; then
     # Create dir for output
-    cidr_dir="${2}${cidr}_range_enum/"
-    mkdir "${cidr_dir}"
+    cidr_dir="${2}${cidr}_range_enum/" # This fails since it interprets the CIDR slash as a new directory. Regexp magic needed.
+    sanitised_dir=$(echo "$cidr_dir" | sed -e 's/\//_/1')
+    mkdir "${sanitised_dir}"
     
     # Run range tools
     if [ "$verbose" -eq 1 ]; then printf "%b[+]%b -c%b flag detected. Proceeding to scan CIDR range with dedicated range enumeration tools.\n%b" "${GREEN}" "${YELLOW}" "${GREEN}" "${RESTORE}"; fi
     
     if [ "$verbose" -eq 1 ]; then running_tool "nbtscan-unixwiz"; fi 
-    nbtscan-unixwiz -f "$cidr" >> "${cidr_dir}"nbtscan-unixwiz.out 2>&1 && \
-      finished_tool "nbtscan-unixwiz" "$cidr" "${cidr_dir}nbtscan-unixwiz.out" &
+    nbtscan-unixwiz -f "$cidr" >> "${sanitised_dir}"nbtscan-unixwiz.out 2>&1 && \
+      finished_tool "nbtscan-unixwiz" "$cidr" "${sanitised_dir}nbtscan-unixwiz.out" &
     
     if [ "$verbose" -eq 1 ]; then running_tool "Responder-RunFinger"; fi
-    responder-RunFinger -i "$cidr" >> "${cidr_dir}"runfinger.out 2>&1 && \
-      finished_tool "responder-RunFinger" "$cidr" "${cidr_dir}runfinger.out" &
+    responder-RunFinger -i "$cidr" >> "${sanitised_dir}"runfinger.out 2>&1 && \
+      finished_tool "responder-RunFinger" "$cidr" "${sanitised_dir}runfinger.out" &
     
     if [ "$verbose" -eq 1 ]; then running_tool "onesixtyone"; fi
-    onesixtyone -c /usr/share/legion/wordlists/snmp-default.txt "$cidr" -o "${cidr_dir}"onesixtyone.out -w 100 >> "${cidr_dir}"onesixtyone_tailable.out 2>&1 && \
-      finished_tool "onesixtyone" "$cidr" "${cidr_dir}onesixtyone.out" &
+    onesixtyone -c /usr/share/legion/wordlists/snmp-default.txt "$cidr" -o "${sanitised_dir}"onesixtyone.out -w 100 >> "${sanitised_dir}"onesixtyone_tailable.out 2>&1 && \
+      finished_tool "onesixtyone" "$cidr" "${sanitised_dir}onesixtyone.out" &
   else
     printf "%b[!] CIDR range %bNOT%b detected. Remember you can also pass a range in CIDR notation to use enum tools that scan a wide range with '%bautoenum -r <IP address>/<network mask>%b'%b\n" "${YELLOW}" "${RED}" "${YELLOW}" "${BLUE}" "${YELLOW}" "${RESTORE}" 
   fi
