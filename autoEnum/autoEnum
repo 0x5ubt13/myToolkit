@@ -217,7 +217,7 @@ cidr_enumeration() {
 }
 
 # Core functionality of this script: iterate through each port and automate launching tools
-rpc+_ports_iterator() {
+ports_iterator() {
   # First arg target IP, second arg dir to save output
   dir="${2}"
   
@@ -352,9 +352,18 @@ rpc+_ports_iterator() {
       fi
       ;;
     2049)
+      printf "%b[+] NFS service detected. Running NFS nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
+
       if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for NFS"; fi
       nmap -sV -n -Pn -p2049,111 "${1}" --script "nfs-ls,nfs-showmount,nfs-statfs" -oN "${dir}ftp_enum.nmap" -v >> "${dir}"ftp_tailable_nmap_scan.out 2>&1 && \
         finished_tool "Nmap scripts for NFS" "${1}" "${dir}ftp_enum.nmap" &
+      
+      if [ "$verbose" -eq 1 ]; then running_tool "Showmount + mount"; fi
+      showmount -e "${1}" >> "${dir}"showmount.out 2>&1 && \
+        mkdir "${dir}"/mounted_NFS_contents/ && \
+        mount -t nfs "${1}":/ "${dir}"/mounted_NFS_contents/ - && \
+        tree "${dir}"/mounted_NFS_contents/ >> "${dir}tree_nfs_directory.out" 2>&1 && \
+        finished_tool "Showmount + mount" "${1}" "${dir}showmount.out && cat ${dir}tree_nfs_directory.out" &
       ;;
     8080) 
       wp_enumeration "${1}" "8080" "${dir}" 
