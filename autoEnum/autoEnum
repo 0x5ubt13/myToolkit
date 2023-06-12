@@ -18,12 +18,16 @@ nb_checked=0
 ldap_checked=0
 verbose=0
 quiet=0
+slower=0
+again=0
 
-while getopts "hvqr:t:d:" flag; do
+while getopts "hvqsar:t:d:" flag; do
   case "${flag}" in
     h) do_help="yes";;
     v) verbose=1;;
     q) quiet=1;;
+    s) slower=1;;
+    a) again=1;;
     r) cidr="${OPTARG}";;
     t) top="${OPTARG}";;
     d) dnsServers="--dns-servers ${OPTARG}";;
@@ -38,13 +42,15 @@ shift $((OPTIND-1))
 # Print usage and exit
 usage() {
   printf "\n%bUsage: %b%s [OPTIONS] <Single target's IP/Targets file>\n" "${GREEN}" "${RESTORE}" "$(basename "$0")"
-  printf "%b\t-h :%b Help      - Display this help and exit.\n" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-v :%b Verbose   - Increase verbosity of the script. Recommended!\n" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-q :%b Quiet     - Don't print the cool banner.\n" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-r :%b Range     - Specify a CIDR range to use tools for whole subnets.\n" "${YELLOW}" "${RESTORE}" 
-  printf "%b\t-t :%b Top ports - Run port sweep with nmap and the flag %b--top-ports=%b<your input>\n" "${YELLOW}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-d :%b DNS       - Specify custom DNS servers. Default option: %b-n%b.\n" "${YELLOW}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
-  printf "%b\nExamples:\n\t%s 192.168.142.93\n\t%s %b-v%b 192.168.142.93\n\t%s 10.129.121.60 %b-d%b <serv1[,serv2],...>\n\t%s 10.129.121.60 %b-r%b 10.129.121.0/24\n\t%s targets_file.txt %b-r%b 10.10.8.0/24%b" "${GREEN}" "$(basename "$0")" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "${RESTORE}"
+  printf "%b\t-h:%b Help      - Display this help and exit.\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-v:%b Verbose   - Increase verbosity of the script. Recommended!\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-q:%b Quiet     - Don't print the cool banner.\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-s:%b Slower    - Don't use Rustscan for the initial port sweep.\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-s:%b Again     - Repeat the scan and compare with initial ports discovered.\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-r:%b Range     - Specify a CIDR range to use tools for whole subnets.\n" "${YELLOW}" "${RESTORE}" 
+  printf "%b\t-t:%b Top ports - Run port sweep with nmap and the flag %b--top-ports=%b<your input>\n" "${YELLOW}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-d:%b DNS       - Specify custom DNS servers. Default option: %b-n%b.\n" "${YELLOW}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
+  printf "%b\nExamples:\n\t%s 192.168.142.93\n\t%s %b-vqa%b 192.168.142.93\n\t%s 10.129.121.60 %b-d%b <serv1[,serv2],...>\n\t%s 10.129.121.60 %b-r%b 10.129.121.0/24\n\t%s targets_file.txt %b-r%b 10.10.8.0/24%b" "${GREEN}" "$(basename "$0")" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "${RESTORE}"
   exit 1
 }
 
@@ -137,17 +143,24 @@ ports_sweep() {
       fi
       ports=$(nmap --min-rate=2000 "$dnsServers" -sS -p- -T4 --top-ports="${top}" "$ping" "$1" 2>/dev/null | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
     else
-      rustscan_check=$(locate "/bin/rustscan" -l 1)
-      if [ -n "$rustscan_check" ]; then
-        # Rustscan ports sweep
-        printf "%b[+] %bRustscan%b found, proceeding to sweep ports with Rustscan%b\n" "${GREEN}" "${BLUE}" "${GREEN}" "${RESTORE}"
-        if [ "$verbose" -eq 1 ]; then printf "\n%b[!] Starting %bRustscan's%b SYN port discovery scan against %b'%s'%b, please bear with...\n" "${YELLOW}" "${BLUE}" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"; fi
-        ports="$(rustscan -a "$IP" "$dnsServers" --ulimit 5000 -g | cut -d ' ' -f 3 | sed 's/[^[:alnum:],\t]//g')"
-      else
+      if [ $slower -eq 1 ]; then
         # Nmap ports sweep
-        printf "%b[-] Rustscan not installed, using nmap -p- as a default for port sweeping. Please consider running the installation script.%b" "${YELLOW}" "${RESTORE}"
-        if [ "$verbose" -eq 1 ]; then printf "\n${YELLOW}[+] Starting nmap SYN port discovery scan against ${RESTORE}'%s'${YELLOW}...\n" "$1"; fi
-        ports=$(nmap --min-rate=2000 -sS -p- -T5 "$ping" "$1" 2>/dev/null | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
+        printf "%b[+] %b-s%b flag detected. Running port sweep with Nmap%b\n" "${GREEN}" "${BLUE}" "${GREEN}" "${RESTORE}"
+        if [ "$verbose" -eq 1 ]; then printf "%b[+] Starting nmap SYN port discovery scan against %b'%s'%b...\n" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"; fi
+          ports=$(nmap --min-rate=2000 -sS -p- -T5 "$ping" "$1" 2>/dev/null | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
+      else
+        rustscan_check=$(locate "/bin/rustscan" -l 1)
+        if [ -n "$rustscan_check" ]; then
+          # Rustscan ports sweep
+          printf "%b[+] %bRustscan%b found, proceeding to sweep ports with Rustscan%b\n" "${GREEN}" "${BLUE}" "${GREEN}" "${RESTORE}"
+          if [ "$verbose" -eq 1 ]; then printf "\n%b[!] Starting %bRustscan's%b SYN port discovery scan against %b'%s'%b, please bear with...\n" "${YELLOW}" "${BLUE}" "${YELLOW}" "${RESTORE}" "$1" "${YELLOW}"; fi
+          ports="$(rustscan -a "$IP" "$dnsServers" --ulimit 5000 -g | cut -d ' ' -f 3 | sed 's/[^[:alnum:],\t]//g')"
+        else
+          # Nmap ports sweep
+          printf "%b[-] Rustscan not installed, using nmap -p- as a default for port sweeping. Please consider running the installation script.%b" "${YELLOW}" "${RESTORE}"
+          if [ "$verbose" -eq 1 ]; then printf "\n${YELLOW}[+] Starting nmap SYN port discovery scan against ${RESTORE}'%s'${YELLOW}...\n" "$1"; fi
+          ports=$(nmap --min-rate=2000 -sS -p- -T5 "$ping" "$1" 2>/dev/null | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
+        fi
       fi
     fi
   fi
@@ -156,9 +169,33 @@ ports_sweep() {
   if [ -z "$ports" ]; then
     sweep_result=1
   else
-    sweep_result=0
-    echo "$ports" > "${2}"open_ports.txt
-    printf "%b[+] Done! Found open ports on target.\n\tOpen ports in %b'%s'%b: %b%s\n%b[+] Saved as '%b%sopen_ports.txt%b' in nmap-friendly format.%b\n" "${GREEN}" "${RESTORE}" "${1}" "${GREEN}" "${RESTORE}" "${ports}" "${GREEN}" "${RESTORE}" "${2}" "${GREEN}" "${RESTORE}"
+    # Check if we are repeating the scan to discover more ports
+    if [ "$again" -eq 1 ]; then
+      if [ "$verbose" -eq 1 ]; then printf "%b[+]%b -a%b flag detected. Proceeding to compare open ports previouisly detected in %s against a new scan.\n%b" "${GREEN}" "${YELLOW}" "${GREEN}" "${2}open_ports.txt" "${RESTORE}"; fi
+  
+      sweep_result=0
+      count1="$(wc -c "${2}"open_ports_repeat.txt | cut -d ' ' -f 1)"
+      echo "$ports" > "${2}"open_ports_repeat.txt
+      # Compare
+      if [[ -n $(diff -q "${2}"open_ports.txt "${2}"open_ports_repeat.txt) ]]; then
+        echo "${2}"open_ports.txt >> "${2}"open_ports_repeat.txt
+        # Merge both files
+        ports="$(< "${2}"open_ports_repeat.txt tr ',' '\n' | sort | uniq | tr '\n' ',' | sed 's/,$//')"
+        echo "$ports" > "${2}"open_ports_repeat.txt
+        count2="$(wc -c "${2}"open_ports_repeat.txt | cut -d ' ' -f 1)"
+        if [ "$count1" -lt "$count2" ]; then
+          printf "%b[+] Ports difference detected!\n\tOpen ports in %b'%s'%b: %b%s\n%b[+] Saved as '%b%sopen_ports_repeat.txt%b' in nmap-friendly format.%b\n" "${GREEN}" "${RESTORE}" "${1}" "${GREEN}" "${RESTORE}" "${ports}" "${GREEN}" "${RESTORE}" "${2}" "${GREEN}" "${RESTORE}"
+        else
+          printf "%b[+] No ports difference detected! Original open ports file left intact.\n\tOpen ports open in %b'%s'%b: %b%s\n%b%b\n" "${GREEN}" "${RESTORE}" "${1}" "${GREEN}" "${RESTORE}" "${ports}" "${GREEN}" "${RESTORE}"
+        fi
+      else
+        printf "%b[+] No ports difference detected! Original open ports file left intact.\n\tOpen ports open in %b'%s'%b: %b%s\n%b%b\n" "${GREEN}" "${RESTORE}" "${1}" "${GREEN}" "${RESTORE}" "${ports}" "${GREEN}" "${RESTORE}"
+      fi
+    else
+      sweep_result=0
+      echo "$ports" > "${2}"open_ports.txt
+      printf "%b[+] Done! Found open ports on target.\n\tOpen ports in %b'%s'%b: %b%s\n%b[+] Saved as '%b%sopen_ports.txt%b' in nmap-friendly format.%b\n" "${GREEN}" "${RESTORE}" "${1}" "${GREEN}" "${RESTORE}" "${ports}" "${GREEN}" "${RESTORE}" "${2}" "${GREEN}" "${RESTORE}"
+    fi
   fi   
 }
 
@@ -408,7 +445,10 @@ ports_iterator() {
       #   - rsync (873)
       #   - rtsp -> hydra (554, 8554)
     *)
-      if [ "$verbose" -eq 1 ]; then printf "%b[-]%b Port %b%s%b detected, but I don't know how to handle it. Please check the %bmain Nmap%b scan.\n" "${RED}" "${RESTORE}" "${YELLOW}" "$port" "${RESTORE}" "${BLUE}" "${RESTORE}"; fi
+      # Hiding message if verbose flag is disabled, since this can be very noisy for high RPC ports
+      if [ "$verbose" -eq 1 ]; then 
+        printf "%b[-]%b Port %b%s%b detected, but I don't know how to handle it. Please check the %bmain Nmap%b scan.\n" "${RED}" "${RESTORE}" "${YELLOW}" "$port" "${RESTORE}" "${BLUE}" "${RESTORE}"
+      fi
       ;;
     esac
   done
@@ -503,7 +543,7 @@ if [ "$verbose" -eq 1 ]; then print_phase 0; fi
 
 # Check 1: help flag passed?
 if [ -n "$do_help" ]; then
-  printf "%b[*] Help flag detected. Aborting other cheks and printing usage.\n%b" "${BLUE}" "${RESTORE}"
+  if [ "$verbose" -eq 1 ]; then printf "%b[*] Help flag detected. Aborting other cheks and printing usage.\n%b" "${BLUE}" "${RESTORE}"; fi
   usage
 fi
 
