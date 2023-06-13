@@ -46,12 +46,22 @@ usage() {
   printf "%b\t-v:%b Verbose   - Increase verbosity of the script. Recommended!\n" "${YELLOW}" "${RESTORE}"
   printf "%b\t-q:%b Quiet     - Don't print the cool banner.\n" "${YELLOW}" "${RESTORE}"
   printf "%b\t-s:%b Slower    - Don't use Rustscan for the initial port sweep.\n" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-s:%b Again     - Repeat the scan and compare with initial ports discovered.\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-a:%b Again     - Repeat the scan and compare with initial ports discovered.\n" "${YELLOW}" "${RESTORE}"
   printf "%b\t-r:%b Range     - Specify a CIDR range to use tools for whole subnets.\n" "${YELLOW}" "${RESTORE}" 
   printf "%b\t-t:%b Top ports - Run port sweep with nmap and the flag %b--top-ports=%b<your input>\n" "${YELLOW}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
   printf "%b\t-d:%b DNS       - Specify custom DNS servers. Default option: %b-n%b.\n" "${YELLOW}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
   printf "%b\nExamples:\n\t%s 192.168.142.93\n\t%s %b-vqa%b 192.168.142.93\n\t%s 10.129.121.60 %b-d%b <serv1[,serv2],...>\n\t%s 10.129.121.60 %b-r%b 10.129.121.0/24\n\t%s targets_file.txt %b-r%b 10.10.8.0/24%b" "${GREEN}" "$(basename "$0")" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "${RESTORE}"
   exit 1
+}
+
+# Make new directory for the newly enumerated protocol to keep things tidy
+custom_mkdir() {
+  # Check first dir doesn't exist
+  if [ ! -d "${1}" ]; then
+    mkdir "${1}" && if [ "$verbose" -eq 1 ]; then printf "%b[+] Created new directory: %s%b\n" "${GREEN}" "${1}" "${RESTORE}"; fi
+  else
+    if [ "$verbose" -eq 1 ]; then printf "%b[-] Directory already exists: %s%b\n" "${RED}" "${1}" "${RESTORE}"; fi
+  fi
 }
 
 # Print red error messages and call usage
@@ -170,9 +180,10 @@ ports_sweep() {
     sweep_result=1
   else
     # Check if we are repeating the scan to discover more ports
-    if [ "$again" -eq 1 ]; then
-      if [ "$verbose" -eq 1 ]; then printf "%b[+]%b -a%b flag detected. Proceeding to compare open ports previouisly detected in %s against a new scan.\n%b" "${GREEN}" "${YELLOW}" "${GREEN}" "${2}open_ports.txt" "${RESTORE}"; fi
-  
+    if [ "$again" -eq 1 ] && [ -f "${2}"open_ports.txt ]; then
+      if [ "$verbose" -eq 1 ]; then 
+        printf "%b[+]%b -a%b flag and previous open ports file detected. Proceeding to compare open ports previouisly detected in %s against a new scan.\n%b" "${GREEN}" "${YELLOW}" "${GREEN}" "${2}open_ports.txt" "${RESTORE}"
+      fi
       sweep_result=0
       count1="$(wc -c "${2}"open_ports_repeat.txt | cut -d ' ' -f 1)"
       echo "$ports" > "${2}"open_ports_repeat.txt
@@ -231,23 +242,22 @@ cidr_enumeration() {
   if [ -n "$cidr" ]; then
     # Create dir for output
     cidr_dir="${2}${cidr}_range_enum/" # This fails since it interprets the CIDR slash as a new directory. Regexp magic needed.
-    sanitised_dir=$(echo "$cidr_dir" | sed -e 's/\//_/1')
-    mkdir "${sanitised_dir}"
+    sanitised_cidr_dir=$(echo "$cidr_dir" | sed -e 's/\//_/1'); custom_mkdir "${sanitised_cidr_dir}"
     
     # Run range tools
     if [ "$verbose" -eq 1 ]; then printf "%b[+]%b -c%b flag detected. Proceeding to scan CIDR range with dedicated range enumeration tools.\n%b" "${GREEN}" "${YELLOW}" "${GREEN}" "${RESTORE}"; fi
     
     if [ "$verbose" -eq 1 ]; then running_tool "nbtscan-unixwiz"; fi 
-    nbtscan-unixwiz -f "$cidr" >> "${sanitised_dir}"nbtscan-unixwiz.out 2>&1 && \
-      finished_tool "nbtscan-unixwiz" "$cidr" "${sanitised_dir}nbtscan-unixwiz.out" &
+    nbtscan-unixwiz -f "$cidr" >> "${sanitised_cidr_dir}"nbtscan-unixwiz.out 2>&1 && \
+      finished_tool "nbtscan-unixwiz" "$cidr" "${sanitised_cidr_dir}nbtscan-unixwiz.out" &
     
     if [ "$verbose" -eq 1 ]; then running_tool "Responder-RunFinger"; fi
-    responder-RunFinger -i "$cidr" >> "${sanitised_dir}"runfinger.out 2>&1 && \
-      finished_tool "responder-RunFinger" "$cidr" "${sanitised_dir}runfinger.out" &
+    responder-RunFinger -i "$cidr" >> "${sanitised_cidr_dir}"runfinger.out 2>&1 && \
+      finished_tool "responder-RunFinger" "$cidr" "${sanitised_cidr_dir}runfinger.out" &
     
     if [ "$verbose" -eq 1 ]; then running_tool "onesixtyone"; fi
-    onesixtyone -c /usr/share/legion/wordlists/snmp-default.txt "$cidr" -o "${sanitised_dir}"onesixtyone.out -w 100 >> "${sanitised_dir}"onesixtyone_tailable.out 2>&1 && \
-      finished_tool "onesixtyone" "$cidr" "${sanitised_dir}onesixtyone.out" &
+    onesixtyone -c /usr/share/legion/wordlists/snmp-default.txt "$cidr" -o "${sanitised_cidr_dir}"onesixtyone.out -w 100 >> "${sanitised_cidr_dir}"onesixtyone_tailable.out 2>&1 && \
+      finished_tool "onesixtyone" "$cidr" "${sanitised_cidr_dir}onesixtyone.out" &
   else
     printf "%b[!] CIDR range %bNOT%b detected. Remember you can also pass a range in CIDR notation to use enum tools that scan a wide range with '%bautoenum -r <IP address>/<network mask>%b'%b\n" "${YELLOW}" "${RED}" "${YELLOW}" "${BLUE}" "${YELLOW}" "${RESTORE}" 
   fi
@@ -277,51 +287,105 @@ ports_iterator() {
     case $port in
     21)
       printf "%b[+] FTP service detected. Running FTP nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
-
+      
+      ftp_dir="${dir}/ftp/"; custom_mkdir "$ftp_dir"
       if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for FTP"; fi
-      nmap -sV -n -Pn -p21 "${1}" --script "ftp-* and not brute" -oN "${dir}ftp_enum.nmap" -v >> "${dir}"ftp_tailable_nmap_scan.out 2>&1 && \
-        finished_tool "Nmap scripts for FTP" "${1}" "${dir}ftp_enum.nmap" &
+      nmap -sV -n -Pn -p21 "${1}" --script "ftp-* and not brute" -oN "${ftp_dir}ftp_enum.nmap" -v >> "${ftp_dir}"ftp_tailable_nmap_scan.out 2>&1 && \
+        finished_tool "Nmap scripts for FTP" "${1}" "${ftp_dir}ftp_enum.nmap" &
       # TODO: add hydra and try to force a list of low-hanging fruit user+pass
       ;;
     22) 
       printf "%b[+] SSH service detected. Running SSH nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
       
+      ssh_dir="${dir}/ssh/"; custom_mkdir "$ssh_dir"
       if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for SSH"; fi
-      nmap -sV -n -Pn -p22 "${1}" --script "ssh* and not brute" -oN "${dir}ssh_enum.nmap" -v >> "${dir}"ssh_tailable_nmap_scan.out 2>&1 && \
-        finished_tool "Nmap scripts for SSH" "${1}" "${dir}ssh_enum.nmap" &
+      nmap -sV -n -Pn -p22 "${1}" --script "ssh* and not brute" -oN "${ssh_dir}ssh_enum.nmap" -v >> "${ssh_dir}"ssh_tailable_nmap_scan.out 2>&1 && \
+        finished_tool "Nmap scripts for SSH" "${1}" "${ssh_dir}ssh_enum.nmap" &
       # TODO: add hydra and try to force a list of low-hanging fruit user+pass
       ;;
     25|465|587) 
       # Just run once for now.
-      if [ ! -f "${dir}smtp_tailable_nmap_scan.nmap" ]; then
-        printf "%b[+] Running SMTP enum tools in port %s%b\n" "${GREEN}" "${port}" "${RESTORE}" 
+      if [ ! -f "${smtp_dir}smtp_nmap_scan.out" ]; then
+        printf "%b[+] SMTP service detected. Running SMTP enum tools in port %s%b\n" "${GREEN}" "${port}" "${RESTORE}" 
 
+        smtp_dir="${dir}/smtp/"; custom_mkdir "$smtp_dir"
         if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for SMTP"; fi
-        nmap -sV -n -Pn -p"$port" --script=smtp-commands,smtp-enum-users,smtp-open-relay "$1" -v -oN snmp-enum.nmap >> "${dir}"smtp_tailable_nmap_scan.out 2>&1 && \
-          finished_tool "Nmap scripts for SMTP" "${1}" "${dir}snmp-enum.nmap" &
-      fi
+        nmap -sV -n -Pn -p"$port" --script "smtp-commands,smtp-enum-users,smtp-open-relay" "$1" -v >> "${smtp_dir}"smtp_nmap_scan.out 2>&1 && \
+          finished_tool "Nmap scripts for SMTP" "${1}" "${smtp_dir}smtp_nmap_scan.out" &
+        fi
       ;;
-    80)
-      # Common Web without TLS 
-      printf "%b[+] Running Web enum tools in port 80%b\n" "${GREEN}" "${RESTORE}"
+    53)
+      printf "%b[+] SSH service detected. Running SSH nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
 
-      if [ "$verbose" -eq 1 ]; then running_tool "Nikto on port 80"; fi
-      nikto -host "${1}" >> "${dir}"nikto_tailable_80.out 2>&1 && \
-        finished_tool "Nikto" "${1}" "${dir}nikto_80.out" &
-      
-      # ffuf killswitch activated after 5 mins of running to save energy and avoid dangling processes consuming CPU
-      if [ -n "$dir_list_medium" ]; then
-        if [ "$verbose" -eq 1 ]; then running_tool "ffuf on port 80"; fi
-        ffuf -u http://"${1}":80/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 >> "${dir}"ffuf_80_tailable.out 2>&1 && \
-          finished_tool "ffuf" "${1}" "${dir}ffuf_tailable_80.out" &
+      dns_dir="${dir}/dns/"; custom_mkdir "$dns_dir"
+      nmap -n -p53 --script "(default and *dns*) or fcrdns or dns-srv-enum or dns-random-txid or dns-random-srcport" "$1" -v >> "${dns_dir}"dns_nmap_scan.out 2>&1 && \
+        finished_tool "Nmap scripts for DNS" "${1}" "${dns_dir}dns_nmap_scan.out" &
+      ;;
+    80|443|8080)
+      # Common Web without TLS
+      http_dir="${dir}/http/"; custom_mkdir "$http_dir" 
+      if [ $port -eq 80 ]; then
+        printf "%b[+] Running Web enum tools in port 80%b\n" "${GREEN}" "${RESTORE}"
+         
+        if [ "$verbose" -eq 1 ]; then running_tool "Nikto on port 80"; fi
+        nikto -host "${1}" >> "${http_dir}"nikto_tailable_80.out 2>&1 && \
+          finished_tool "Nikto" "${1}" "${http_dir}nikto_80.out" &
+        
+        # ffuf killswitch activated after 5 mins of running to save energy and avoid dangling processes consuming CPU
+        if [ -n "$dir_list_medium" ]; then
+          if [ "$verbose" -eq 1 ]; then running_tool "ffuf on port 80"; fi
+          ffuf -u http://"${1}":80/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 >> "${http_dir}"ffuf_80_tailable.out 2>&1 && \
+            finished_tool "ffuf" "${1}" "${http_dir}ffuf_tailable_80.out" &
+        else
+          printf "%b[-] Error: %bmedium directory wordlist not found. Aborting web fuzzing on port 80." "${RED}" "${RESTORE}"
+        fi
+        wp_enumeration "${1}" "80" "${http_dir}"
+      elif [ $port -eq 443 ]; then
+        # Common Web 
+        printf "%b[+] Running Web enum tools in port 443%b\n" "${GREEN}" "${RESTORE}"
+  
+        if [ "$verbose" -eq 1 ]; then running_tool "Nikto"; fi
+        nikto -host "${1}" >> "${http_dir}"nikto_tailable_443.out 2>&1 && \
+          finished_tool "Nikto on port 443" "${1}" "${http_dir}nikto_tailable_443.out" &
+  
+        # ffuf killswitch activated after 5 mins of running to save energy and avoid dangling processes consuming CPU
+        if [ -z "$dir_list_medium" ]; then
+          if [ "$verbose" -eq 1 ]; then running_tool "ffuf on port 443"; fi
+          ffuf -u https://"${1}":443/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 >> "${http_dir}"ffuf_443_tailable.out 2>&1 && \
+            finished_tool "ffuf on port 443" "${1}" "${http_dir}ffuf_tailable_443.out" &
+        else
+          printf "%b[-] Error: %bmedium directory wordlist not found. Aborting web fuzzing on port 443." "${RED}" "${RESTORE}"
+        fi
+        wp_enumeration "${1}" "443" "${http_dir}"
       else
-        printf "%b[-] Error: %bmedium directory wordlist not found. Aborting web fuzzing on port 80." "${RED}" "${RESTORE}"
-      fi
-      wp_enumeration "${1}" "80" "${dir}"
+        # Try and enumerate port 8080
+        printf "%b[+] Running Web enum tools in port 8080%b\n" "${GREEN}" "${RESTORE}"
+        wp_enumeration "${1}" "8080" "${http_dir}" 
+        
+        tomcat_version=$(curl -s -X GET http://"${IP}":8080/docs/ | grep -i 'Tomcat')
+        if [ -n "$tomcat_version" ]; then
+          printf "%b[+] Web service Tomcat detected. Running Tomcat enum tools%b\n" "${GREEN}" "${RESTORE}"
+    
+          if [ -n "$dir_list_medium" ]; then
+            if [ "$verbose" -eq 1 ]; then running_tool "gobuster"; fi
+            gobuster -z -q dir -e -u "${1}":8080 -w "$dir_list_medium" >> "${http_dir}"gobuster_tomcat.out 2>&1 && \
+              finished_tool "gobuster on port 8080" "${1}" "${http_dir}gobuster_tomcat.out" &
+          else
+          printf "%b[-] Error: %bmedium directory wordlist not found. Aborting web fuzzing on port 8080." "${RED}" "${RESTORE}"
+          fi
+          if [ -n "$darkweb_top1000" ]; then
+            if [ "$verbose" -eq 1 ]; then running_tool "hydra"; fi
+            hydra -L users.txt -P "$darkweb_top1000" -f "${1}" http-get /manager/html >> "${http_dir}"hydra_tailable.out 2>&1 && \
+              finished_tool "Hydra" "${1}" "${http_dir}hydra_tailable.out" &
+          else
+          printf "%b[-] Error: %bdarkweb_top1000 wordlist not found. Aborting bruteforcing with hydra on port 8080." "${RED}" "${RESTORE}"
+          fi
+        fi
+      fi 
       ;;
     111)
       printf "%b[+] RPC service detected. Running RPC nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
-      
+
       if [ "$verbose" -eq 1 ]; then running_tool "Nmap for RPC on UDP"; fi
       nmap -n -Pn -sVC -p 111 -sU "${1}" -oN "${dir}"rpc_nmap_udp_scan.nmap >> "${dir}rpc_udp_tailable_nmap_scan" 2>&1 && \
         finished_tool "Nmap for RPC on UDP" "${1}" "${dir}rpc_udp_nmap_scan.nmap" &
@@ -355,23 +419,7 @@ ports_iterator() {
           finished_tool "Nmap scripts for SMB" "${1}" "${dir}smb_enum.nmap" &
       fi
       ;;
-    443)
-      # Common Web 
-      printf "%b[+] Running Web enum tools in port 443%b\n" "${GREEN}" "${RESTORE}"
-
-      if [ "$verbose" -eq 1 ]; then running_tool "Nikto"; fi
-      nikto -host "${1}" >> "${dir}"nikto_tailable_443.out 2>&1 && \
-        finished_tool "Nikto on port 443" "${1}" "${dir}nikto_tailable_443.out" &
-
-      # ffuf killswitch activated after 5 mins of running to save energy and avoid dangling processes consuming CPU
-      if [ -z "$dir_list_medium" ]; then
-        if [ "$verbose" -eq 1 ]; then running_tool "ffuf on port 443"; fi
-        ffuf -u https://"${1}":443/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 >> "${dir}"ffuf_443_tailable.out 2>&1 && \
-          finished_tool "ffuf on port 443" "${1}" "${dir}ffuf_tailable_443.out" &
-      else
-        printf "%b[-] Error: %bmedium directory wordlist not found. Aborting web fuzzing on port 443." "${RED}" "${RESTORE}"
-      fi
-      wp_enumeration "${1}" "443" "${dir}"
+    
       ;;
     389|636|3268|3269)
       # Run only once
@@ -402,29 +450,7 @@ ports_iterator() {
         tree "${dir}"/mounted_NFS_contents/ >> "${dir}tree_nfs_directory.out" 2>&1 && \
         finished_tool "Showmount + mount" "${1}" "${dir}showmount.out && cat ${dir}tree_nfs_directory.out" &
       ;;
-    8080) 
-      wp_enumeration "${1}" "8080" "${dir}" 
-
-      tomcat_version=$(curl -s -X GET http://"${IP}":8080/docs/ | grep -i 'Tomcat')
-      if [ -n "$tomcat_version" ]; then
-        printf "%b[+] Web service Tomcat detected. Running Tomcat enum tools%b\n" "${GREEN}" "${RESTORE}"
-  
-        if [ -n "$dir_list_medium" ]; then
-          if [ "$verbose" -eq 1 ]; then running_tool "gobuster"; fi
-          gobuster -z -q dir -e -u "${1}":8080 -w "$dir_list_medium" >> "${dir}"gobuster_tomcat.out 2>&1 && \
-            finished_tool "gobuster on port 8080" "${1}" "${dir}gobuster_tomcat.out" &
-        else
-        printf "%b[-] Error: %bmedium directory wordlist not found. Aborting web fuzzing on port 8080." "${RED}" "${RESTORE}"
-        fi
-        if [ -n "$darkweb_top1000" ]; then
-          if [ "$verbose" -eq 1 ]; then running_tool "hydra"; fi
-          hydra -L users.txt -P "$darkweb_top1000" -f "${1}" http-get /manager/html >> "${dir}"hydra_tailable.out 2>&1 && \
-            finished_tool "Hydra" "${1}" "${dir}hydra_tailable.out" &
-        else
-        printf "%b[-] Error: %bdarkweb_top1000 wordlist not found. Aborting bruteforcing with hydra on port 8080." "${RED}" "${RESTORE}"
-        fi
-      fi
-      ;;
+    
       # 512)
       #  hydra
       #  ;;
@@ -467,9 +493,8 @@ main() {
   # Check whether input is a single or multiple target and loop accordingly
   if [[ ! -f "$IP" ]]; then 
     # ---------- Single target ----------
-    dir="${DIR}${IP}/"
-
-    # Colouring red to catch mkdir's File exists error
+    dir="${DIR}${IP}/"; custom_mkdir "$dir"
+    
     printf "%b" "${RED}"; mkdir "${dir}"; printf "%b" "${RESTORE}"
     printf "%b[+] Using '%b%s%b' as single target IP and '%b%s%b' for all the tools output%b\n" "${GREEN}" "${RESTORE}" "${IP}" "${GREEN}" "${RESTORE}" "${dir}" "${GREEN}" "${RESTORE}"
 
@@ -574,9 +599,7 @@ else
   DIR="$(pwd)/autoEnum_output/"
 fi
 
-if [[ ! -d "${DIR}" ]]; then
-  mkdir "${DIR}"
-fi
+custom_mkdir "${DIR}"
 
 # Check 5: locate exists in the system
 updatedb_check=$(which updatedb)
