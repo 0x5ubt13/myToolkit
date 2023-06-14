@@ -14,7 +14,6 @@ START="$(date +%s)" # Timing the execution
 # Defaults:
 dnsServers=""
 do_help=""
-nb_checked=0
 ldap_checked=0
 verbose=0
 quiet=0
@@ -287,8 +286,8 @@ ports_iterator() {
     case $port in
     21)
       printf "%b[+] FTP service detected. Running FTP nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
-      
       ftp_dir="${dir}/ftp/"; custom_mkdir "$ftp_dir"
+      
       if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for FTP"; fi
       nmap -sV -n -Pn -p21 "${1}" --script "ftp-* and not brute" -oN "${ftp_dir}ftp_enum.nmap" -v >> "${ftp_dir}"ftp_tailable_nmap_scan.out 2>&1 && \
         finished_tool "Nmap scripts for FTP" "${1}" "${ftp_dir}ftp_enum.nmap" &
@@ -296,8 +295,8 @@ ports_iterator() {
       ;;
     22) 
       printf "%b[+] SSH service detected. Running SSH nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
-      
       ssh_dir="${dir}/ssh/"; custom_mkdir "$ssh_dir"
+
       if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for SSH"; fi
       nmap -sV -n -Pn -p22 "${1}" --script "ssh* and not brute" -oN "${ssh_dir}ssh_enum.nmap" -v >> "${ssh_dir}"ssh_tailable_nmap_scan.out 2>&1 && \
         finished_tool "Nmap scripts for SSH" "${1}" "${ssh_dir}ssh_enum.nmap" &
@@ -307,8 +306,8 @@ ports_iterator() {
       # Just run once for now.
       if [ ! -f "${smtp_dir}smtp_nmap_scan.out" ]; then
         printf "%b[+] SMTP service detected. Running SMTP enum tools in port %s%b\n" "${GREEN}" "${port}" "${RESTORE}" 
-
         smtp_dir="${dir}/smtp/"; custom_mkdir "$smtp_dir"
+
         if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for SMTP"; fi
         nmap -sV -n -Pn -p"$port" --script "smtp-commands,smtp-enum-users,smtp-open-relay" "$1" -v >> "${smtp_dir}"smtp_nmap_scan.out 2>&1 && \
           finished_tool "Nmap scripts for SMTP" "${1}" "${smtp_dir}smtp_nmap_scan.out" &
@@ -316,15 +315,16 @@ ports_iterator() {
       ;;
     53)
       printf "%b[+] SSH service detected. Running SSH nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
-
       dns_dir="${dir}/dns/"; custom_mkdir "$dns_dir"
+
+      if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for DNS"; fi
       nmap -n -p53 --script "(default and *dns*) or fcrdns or dns-srv-enum or dns-random-txid or dns-random-srcport" "$1" -v >> "${dns_dir}"dns_nmap_scan.out 2>&1 && \
         finished_tool "Nmap scripts for DNS" "${1}" "${dns_dir}dns_nmap_scan.out" &
       ;;
     80|443|8080)
       # Common Web without TLS
       http_dir="${dir}/http/"; custom_mkdir "$http_dir" 
-      if [ $port -eq 80 ]; then
+      if [ "$port" -eq 80 ]; then
         printf "%b[+] Running Web enum tools in port 80%b\n" "${GREEN}" "${RESTORE}"
          
         if [ "$verbose" -eq 1 ]; then running_tool "Nikto on port 80"; fi
@@ -340,7 +340,7 @@ ports_iterator() {
           printf "%b[-] Error: %bmedium directory wordlist not found. Aborting web fuzzing on port 80." "${RED}" "${RESTORE}"
         fi
         wp_enumeration "${1}" "80" "${http_dir}"
-      elif [ $port -eq 443 ]; then
+      elif [ "$port" -eq 443 ]; then
         # Common Web 
         printf "%b[+] Running Web enum tools in port 443%b\n" "${GREEN}" "${RESTORE}"
   
@@ -385,54 +385,53 @@ ports_iterator() {
       ;;
     111)
       printf "%b[+] RPC service detected. Running RPC nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
+      rpc_dir="${dir}/rpc/"; custom_mkdir "$rpc_dir"
 
       if [ "$verbose" -eq 1 ]; then running_tool "Nmap for RPC on UDP"; fi
-      nmap -n -Pn -sVC -p 111 -sU "${1}" -oN "${dir}"rpc_nmap_udp_scan.nmap >> "${dir}rpc_udp_tailable_nmap_scan" 2>&1 && \
-        finished_tool "Nmap for RPC on UDP" "${1}" "${dir}rpc_udp_nmap_scan.nmap" &
+      nmap -n -Pn -sVC -p 111 -sU "${1}" -oN "${rpc_dir}"rpc_nmap_udp_scan.nmap >> "${rpc_dir}rpc_udp_tailable_nmap_scan" 2>&1 && \
+        finished_tool "Nmap for RPC on UDP" "${1}" "${rpc_dir}rpc_udp_nmap_scan.nmap" &
       ;;
     137|138|139|445)
       # Run only once
-      if [ "$nb_checked" -eq 0 ]; then
-        nb_checked=1
+      if [ ! -d "$dir/nb_smb" ]; then
         printf "%b[+] NetBIOS/SMB detected. Running NB/SMB enum tools.%b\n" "${GREEN}" "${RESTORE}"
+        nb_smb_dir="${dir}/nb_smb/"; custom_mkdir "$nb_smb_dir"
         
         if [ "$verbose" -eq 1 ]; then running_tool "CrackMapExec"; fi
-        crackmapexec smb "${1}" --shares -u '' -p '' --shares --sessions --disks --loggedon-users --users --groups --computers --local-groups --pass-pol --rid-brute >> "${dir}"cme_anon.out 2>&1 && \
-          finished_tool "CrackMapExec" "${1}" "${dir}cme_anon.out" &
+        crackmapexec smb "${1}" --shares -u '' -p '' --shares --sessions --disks --loggedon-users --users --groups --computers --local-groups --pass-pol --rid-brute >> "${nb_smb_dir}"cme_anon.out 2>&1 && \
+          finished_tool "CrackMapExec" "${1}" "${nb_smb_dir}cme_anon.out" &
         
         if [ "$verbose" -eq 1 ]; then running_tool "SMBMap"; fi
-        smbmap -H "${1}" >> "${dir}"smbmap_anon.out 2>&1 && \
-          finished_tool "SMBMap" "${1}" "${dir}smbmap_anon.out" &
+        smbmap -H "${1}" >> "${nb_smb_dir}smbmap_anon.out" 2>&1 && \
+          finished_tool "SMBMap" "${1}" "${nb_smb_dir}smbmap_anon.out" &
   
         if [ "$verbose" -eq 1 ]; then running_tool "NBLookup"; fi
-        nmblookup -A "${1}" >> "$dir"nmblookup.out 2>&1 && \
-          finished_tool "NMBLookup" "${1}" "${dir}nmblookup.out" &
+        nmblookup -A "${1}" >> "${nb_smb_dir}nmblookup.out" 2>&1 && \
+          finished_tool "NMBLookup" "${1}" "${nb_smb_dir}nmblookup.out" &
     
         if [ "$verbose" -eq 1 ]; then running_tool "enum4linux"; fi
-        enum4linux -u '' -p '' "${1}" >> "$dir"enum4linux_anon.out 2>&1 && \
-          finished_tool "enum4linux" "${1}" "$dir"enum4linux_anon.out & 
+        enum4linux -u '' -p '' "${1}" >> "${nb_smb_dir}enum4linux_anon.out" 2>&1 && \
+          finished_tool "enum4linux" "${1}" "${nb_smb_dir}enum4linux_anon.out" & 
 
         if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for NB/SMB"; fi
-        nmap -Pn -sUV -p137 -n -sV --script "nbstat.nse" "${1}" -v -oN "${dir}nb_udp_enum.nmap" >> "${dir}"nb_udp_tailable_nmap_scan.out 2>&1 &&
-          finished_tool "Nmap scripts for NetBios" "${1}" "${dir}nb_enum.nmap" &
-        nmap -Pn -p139,445 -n -sV --script "smb* and not brute" "${1}" -v -oN "${dir}smb_enum.nmap" >> "${dir}"smb_tailable_nmap_scan.out 2>&1 && \
-          finished_tool "Nmap scripts for SMB" "${1}" "${dir}smb_enum.nmap" &
+        nmap -Pn -sUV -p137 -n -sV --script "nbstat.nse" "${1}" -v >> "${nb_smb_dir}nb_udp_tailable_nmap_scan.out" 2>&1 &&
+          finished_tool "Nmap scripts for NetBios" "${1}" "${nb_smb_dir}nb_enum.nmap" &
+        nmap -Pn -p139,445 -n -sV --script "smb* and not brute" "${1}" -v >> "${nb_smb_dir}smb_tailable_nmap_scan.out" 2>&1 && \
+          finished_tool "Nmap scripts for SMB" "${1}" "${nb_smb_dir}smb_enum.nmap" &
       fi
-      ;;
-    
       ;;
     389|636|3268|3269)
       # Run only once
-      if [ "$ldap_checked" -eq 0 ]; then
-        ldap_checked=1
+      if [ ! -d "${dir}/ldap/" ]; then
         printf "%b[+] Running LDAP enum tools in port %s%b\n" "${GREEN}" "${port}" "${RESTORE}" 
         
+        ldap_dir="${dir}/ldap/"; custom_mkdir "$ldap_dir"
         if [ "$verbose" -eq 1 ]; then running_tool "ldapsearch (null credentials attack)"; fi
-        ldapsearch -x -H ldap://"${1}" -D '' -w '' -b "DC=<1_SUBDOMAIN>,DC=<TLD>" >> "${dir}"ldapsearch.out 2>&1 && \
+        ldapsearch -x -H ldap://"${1}" -D '' -w '' -b "DC=<1_SUBDOMAIN>,DC=<TLD>" >> "${ldap_dir}ldapsearch.out" 2>&1 && \
           finished_tool "ldapsearch" "${1}" "${dir}ldapsearch.out" &
         
         if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for LDAP"; fi
-        nmap -Pn -p"$port" -n -sV --script "ldap* and not brute" "${1}" -v -oN ldap_enum.nmap >> "${dir}"ldap_tailable_nmap_scan.out 2>&1 && \
+        nmap -Pn -p"$port" -n -sV --script "ldap* and not brute" "${1}" -v >> "${ldap_dir}ldap_tailable_nmap_scan.out" 2>&1 && \
           finished_tool "Nmap scripts for LDAP" "${1}" "${dir}ldap_enum.nmap" &
       fi
       ;;
