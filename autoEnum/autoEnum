@@ -14,7 +14,6 @@ START="$(date +%s)" # Timing the execution
 # Defaults:
 dnsServers=""
 do_help=""
-ldap_checked=0
 verbose=0
 quiet=0
 slower=0
@@ -286,7 +285,7 @@ ports_iterator() {
     case $port in
     21)
       printf "%b[+] FTP service detected. Running FTP nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
-      ftp_dir="${dir}/ftp/"; custom_mkdir "$ftp_dir"
+      ftp_dir="${dir}ftp/"; custom_mkdir "$ftp_dir"
       
       if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for FTP"; fi
       nmap -sV -n -Pn -p21 "${1}" --script "ftp-* and not brute" -oN "${ftp_dir}ftp_enum.nmap" -v >> "${ftp_dir}"ftp_tailable_nmap_scan.out 2>&1 && \
@@ -295,7 +294,7 @@ ports_iterator() {
       ;;
     22) 
       printf "%b[+] SSH service detected. Running SSH nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
-      ssh_dir="${dir}/ssh/"; custom_mkdir "$ssh_dir"
+      ssh_dir="${dir}ssh/"; custom_mkdir "$ssh_dir"
 
       if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for SSH"; fi
       nmap -sV -n -Pn -p22 "${1}" --script "ssh* and not brute" -oN "${ssh_dir}ssh_enum.nmap" -v >> "${ssh_dir}"ssh_tailable_nmap_scan.out 2>&1 && \
@@ -304,9 +303,9 @@ ports_iterator() {
       ;;
     25|465|587) 
       # Just run once for now.
-      if [ ! -f "${smtp_dir}smtp_nmap_scan.out" ]; then
+      if [ ! -d "${smtp_dir}" ]; then
         printf "%b[+] SMTP service detected. Running SMTP enum tools in port %s%b\n" "${GREEN}" "${port}" "${RESTORE}" 
-        smtp_dir="${dir}/smtp/"; custom_mkdir "$smtp_dir"
+        smtp_dir="${dir}smtp/"; custom_mkdir "$smtp_dir"
 
         if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for SMTP"; fi
         nmap -sV -n -Pn -p"$port" --script "smtp-commands,smtp-enum-users,smtp-open-relay" "$1" -v >> "${smtp_dir}"smtp_nmap_scan.out 2>&1 && \
@@ -315,7 +314,7 @@ ports_iterator() {
       ;;
     53)
       printf "%b[+] SSH service detected. Running SSH nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
-      dns_dir="${dir}/dns/"; custom_mkdir "$dns_dir"
+      dns_dir="${dir}dns/"; custom_mkdir "$dns_dir"
 
       if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for DNS"; fi
       nmap -n -p53 --script "(default and *dns*) or fcrdns or dns-srv-enum or dns-random-txid or dns-random-srcport" "$1" -v >> "${dns_dir}"dns_nmap_scan.out 2>&1 && \
@@ -323,7 +322,7 @@ ports_iterator() {
       ;;
     80|443|8080)
       # Common Web without TLS
-      http_dir="${dir}/http/"; custom_mkdir "$http_dir" 
+      http_dir="${dir}http/"; custom_mkdir "$http_dir" 
       if [ "$port" -eq 80 ]; then
         printf "%b[+] Running Web enum tools in port 80%b\n" "${GREEN}" "${RESTORE}"
          
@@ -385,7 +384,7 @@ ports_iterator() {
       ;;
     111)
       printf "%b[+] RPC service detected. Running RPC nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
-      rpc_dir="${dir}/rpc/"; custom_mkdir "$rpc_dir"
+      rpc_dir="${dir}rpc/"; custom_mkdir "$rpc_dir"
 
       if [ "$verbose" -eq 1 ]; then running_tool "Nmap for RPC on UDP"; fi
       nmap -n -Pn -sVC -p 111 -sU "${1}" -oN "${rpc_dir}"rpc_nmap_udp_scan.nmap >> "${rpc_dir}rpc_udp_tailable_nmap_scan" 2>&1 && \
@@ -393,9 +392,9 @@ ports_iterator() {
       ;;
     137|138|139|445)
       # Run only once
-      if [ ! -d "$dir/nb_smb" ]; then
+      if [ ! -d "${dir}nb_smb" ]; then
         printf "%b[+] NetBIOS/SMB detected. Running NB/SMB enum tools.%b\n" "${GREEN}" "${RESTORE}"
-        nb_smb_dir="${dir}/nb_smb/"; custom_mkdir "$nb_smb_dir"
+        nb_smb_dir="${dir}nb_smb/"; custom_mkdir "$nb_smb_dir"
         
         if [ "$verbose" -eq 1 ]; then running_tool "CrackMapExec"; fi
         crackmapexec smb "${1}" --shares -u '' -p '' --shares --sessions --disks --loggedon-users --users --groups --computers --local-groups --pass-pol --rid-brute >> "${nb_smb_dir}"cme_anon.out 2>&1 && \
@@ -422,10 +421,10 @@ ports_iterator() {
       ;;
     389|636|3268|3269)
       # Run only once
-      if [ ! -d "${dir}/ldap/" ]; then
+      if [ ! -d "${dir}ldap/" ]; then
         printf "%b[+] Running LDAP enum tools in port %s%b\n" "${GREEN}" "${port}" "${RESTORE}" 
         
-        ldap_dir="${dir}/ldap/"; custom_mkdir "$ldap_dir"
+        ldap_dir="${dir}ldap/"; custom_mkdir "$ldap_dir"
         if [ "$verbose" -eq 1 ]; then running_tool "ldapsearch (null credentials attack)"; fi
         ldapsearch -x -H ldap://"${1}" -D '' -w '' -b "DC=<1_SUBDOMAIN>,DC=<TLD>" >> "${ldap_dir}ldapsearch.out" 2>&1 && \
           finished_tool "ldapsearch" "${1}" "${dir}ldapsearch.out" &
@@ -444,9 +443,9 @@ ports_iterator() {
       
       if [ "$verbose" -eq 1 ]; then running_tool "Showmount + mount"; fi
       showmount -e "${1}" >> "${dir}"showmount.out 2>&1 && \
-        mkdir "${dir}"/mounted_NFS_contents/ && \
-        mount -t nfs "${1}":/ "${dir}"/mounted_NFS_contents/ - && \
-        tree "${dir}"/mounted_NFS_contents/ >> "${dir}tree_nfs_directory.out" 2>&1 && \
+        mkdir "${dir}"mounted_NFS_contents/ && \
+        mount -t nfs "${1}":/ "${dir}"mounted_NFS_contents/ - && \
+        tree "${dir}"mounted_NFS_contents/ >> "${dir}tree_nfs_directory.out" 2>&1 && \
         finished_tool "Showmount + mount" "${1}" "${dir}showmount.out && cat ${dir}tree_nfs_directory.out" &
       ;;
     
