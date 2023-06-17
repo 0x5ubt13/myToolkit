@@ -55,7 +55,8 @@ Examples:
 - Onesixtyone
 - Responder-RunFinger
 - Rustscan
-- Smbmap
+- SMBMap
+- SNMPWalk
 - WPScan
 
 ## Tools yet to implement

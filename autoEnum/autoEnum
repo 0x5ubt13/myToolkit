@@ -172,6 +172,9 @@ ports_sweep() {
     fi
   fi
   
+  # Add and merge an UDP scan
+  ports="$ports,"$(nmap --min-rate=2000 -sU -p161 -T5 --open "$ping" "$1" 2>/dev/null | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
+
   # Check whether there are ports in the var
   if [ -z "$ports" ]; then
     sweep_result=1
@@ -205,6 +208,9 @@ ports_sweep() {
       printf "%b[+] Done! Found open ports on target.\n\tOpen ports in %b'%s'%b: %b%s\n%b[+] Saved as '%b%sopen_ports.txt%b' in nmap-friendly format.%b\n" "${GREEN}" "${RESTORE}" "${1}" "${GREEN}" "${RESTORE}" "${ports}" "${GREEN}" "${RESTORE}" "${2}" "${GREEN}" "${RESTORE}"
     fi
   fi   
+
+  # Scan 161 UDP
+  nmap 
 }
 
 # Proceed with an aggressive scan
@@ -437,6 +443,22 @@ ports_iterator() {
         nmap -Pn -p139,445 -n -sV --script "smb* and not brute" "${1}" -v >> "${nb_smb_dir}smb_tailable_nmap_scan.out" 2>&1 && \
           finished_tool "Nmap scripts for SMB" "${1}" "${nb_smb_dir}smb_enum.nmap" &
       fi
+      ;;
+    161)
+      printf "%b[+] SNMP detected. Running SNMP enum tools.%b\n" "${GREEN}" "${RESTORE}"
+      snmp_dir="${dir}snmp/"; custom_mkdir "$snmp_dir"
+      
+      if [ "$verbose" -eq 1 ]; then running_tool "SNMPWalk v1"; fi
+      snmpwalk -v1 -c public "${1}" >> "${snmp_dir}snmpwalk_v1_public.out" 2>&1 && \
+        finished_tool "SNMPWalk v1" "${1}" "${snmp_dir}snmpwalk_v1_public.out" &
+
+      if [ "$verbose" -eq 1 ]; then running_tool "SNMPWalk v2c"; fi
+      snmpwalk -v2c -c public "${1}" >> "${snmp_dir}snmpwalk_v2c_public.out" 2>&1 && \
+        finished_tool "SNMPWalk v2c" "${1}" "${snmp_dir}snmpwalk_v2c_public.out" &
+
+      if [ "$verbose" -eq 1 ]; then running_tool "OneSixtyOne"; fi
+      onesixtyone -c "$(locate SNMP/snmp.txt -l 1)" "${1}" >> "${snmp_dir}onesixtyone.out" 2>&1 && \
+        finished_tool "enum4linux" "${1}" "${snmp_dir}onesixtyone.out" &
       ;;
     389|636|3268|3269)
       # Run only once
