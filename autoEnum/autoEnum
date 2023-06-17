@@ -14,21 +14,20 @@ START="$(date +%s)" # Timing the execution
 # Defaults:
 dnsServers=""
 do_help=""
-verbose=0
-quiet=0
+verbose=1
 slower=0
 again=0
 
-while getopts "hvqsar:t:d:" flag; do
+while getopts "ad:hp:qr:st:" flag; do
   case "${flag}" in
-    h) do_help="yes";;
-    v) verbose=1;;
-    q) quiet=1;;
-    s) slower=1;;
     a) again=1;;
-    r) cidr="${OPTARG}";;
-    t) top="${OPTARG}";;
     d) dnsServers="--dns-servers ${OPTARG}";;
+    t) ip="${OPTARG}";;
+    h) do_help="yes";;
+    q) verbose=0;;
+    r) cidr="${OPTARG}";;
+    s) slower=1;;
+    p) top="${OPTARG}";;
     *) error_msg "Invalid options provided";;
   esac
 done
@@ -40,15 +39,15 @@ shift $((OPTIND-1))
 # Print usage and exit
 usage() {
   printf "\n%bUsage: %b%s [OPTIONS] <Single target's IP/Targets file>\n" "${GREEN}" "${RESTORE}" "$(basename "$0")"
-  printf "%b\t-h:%b Help      - Display this help and exit.\n" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-v:%b Verbose   - Increase verbosity of the script. Recommended!\n" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-q:%b Quiet     - Don't print the cool banner.\n" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-s:%b Slower    - Don't use Rustscan for the initial port sweep.\n" "${YELLOW}" "${RESTORE}"
   printf "%b\t-a:%b Again     - Repeat the scan and compare with initial ports discovered.\n" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-r:%b Range     - Specify a CIDR range to use tools for whole subnets.\n" "${YELLOW}" "${RESTORE}" 
-  printf "%b\t-t:%b Top ports - Run port sweep with nmap and the flag %b--top-ports=%b<your input>\n" "${YELLOW}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
   printf "%b\t-d:%b DNS       - Specify custom DNS servers. Default option: %b-n%b.\n" "${YELLOW}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
-  printf "%b\nExamples:\n\t%s 192.168.142.93\n\t%s %b-vqa%b 192.168.142.93\n\t%s 10.129.121.60 %b-d%b <serv1[,serv2],...>\n\t%s 10.129.121.60 %b-r%b 10.129.121.0/24\n\t%s targets_file.txt %b-r%b 10.10.8.0/24%b" "${GREEN}" "$(basename "$0")" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "${RESTORE}"
+  printf "%b\t-h:%b Help      - Display this help and exit.\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-p:%b top Ports - Run port sweep with nmap and the flag %b--top-ports=%b<your input>\n" "${YELLOW}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-q:%b Quiet     - Don't print the cool banner and decrease overall verbosity.\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-r:%b Range     - Specify a CIDR range to use tools for whole subnets.\n" "${YELLOW}" "${RESTORE}" 
+  printf "%b\t-s:%b Slower    - Don't use Rustscan for the initial port sweep.\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-t:%b Target    - Specify target single IP / List of IPs file.\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\nExamples:\n\t%s -t 192.168.142.93\n\t%s %b-qa -t%b 192.168.142.93\n\t%s -t 10.129.121.60 %b-d%b <serv1[,serv2],...>\n\t%s -t 10.129.121.60 %b-r%b 10.129.121.0/24\n\t%s -t targets_file.txt %b-r%b 10.10.8.0/24%b" "${GREEN}" "$(basename "$0")" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "${RESTORE}"
   exit 1
 }
 
@@ -239,23 +238,23 @@ cidr_enumeration() {
   # First arg target CIDR, second arg dir
   if [ -n "$cidr" ]; then
     # Create dir for output
-    cidr_dir="${2}${cidr}_range_enum/" # This fails since it interprets the CIDR slash as a new directory. Regexp magic needed.
-    sanitised_cidr_dir=$(echo "$cidr_dir" | sed -e 's/\//_/1'); custom_mkdir "${sanitised_cidr_dir}"
+    cidr_dir="${1}$(echo "$cidr" | sed -e 's/\//_/1')_range_enum/"
+    custom_mkdir "$cidr_dir"
     
     # Run range tools
-    if [ "$verbose" -eq 1 ]; then printf "%b[+]%b -c%b flag detected. Proceeding to scan CIDR range with dedicated range enumeration tools.\n%b" "${GREEN}" "${YELLOW}" "${GREEN}" "${RESTORE}"; fi
+    if [ "$verbose" -eq 1 ]; then printf "%b[+]%b -r%b flag detected. Proceeding to scan CIDR range with dedicated range enumeration tools.\n%b" "${GREEN}" "${YELLOW}" "${GREEN}" "${RESTORE}"; fi
     
     if [ "$verbose" -eq 1 ]; then running_tool "nbtscan-unixwiz"; fi 
-    nbtscan-unixwiz -f "$cidr" >> "${sanitised_cidr_dir}"nbtscan-unixwiz.out 2>&1 && \
-      finished_tool "nbtscan-unixwiz" "$cidr" "${sanitised_cidr_dir}nbtscan-unixwiz.out" &
+    nbtscan-unixwiz -f "$cidr" >> "${cidr_dir}"nbtscan-unixwiz.out 2>&1 && \
+      finished_tool "nbtscan-unixwiz" "$cidr" "${cidr_dir}nbtscan-unixwiz.out" &
     
     if [ "$verbose" -eq 1 ]; then running_tool "Responder-RunFinger"; fi
-    responder-RunFinger -i "$cidr" >> "${sanitised_cidr_dir}"runfinger.out 2>&1 && \
-      finished_tool "responder-RunFinger" "$cidr" "${sanitised_cidr_dir}runfinger.out" &
+    responder-RunFinger -i "$cidr" >> "${cidr_dir}"runfinger.out 2>&1 && \
+      finished_tool "responder-RunFinger" "$cidr" "${cidr_dir}runfinger.out" &
     
     if [ "$verbose" -eq 1 ]; then running_tool "onesixtyone"; fi
-    onesixtyone -c /usr/share/legion/wordlists/snmp-default.txt "$cidr" -o "${sanitised_cidr_dir}"onesixtyone.out -w 100 >> "${sanitised_cidr_dir}"onesixtyone_tailable.out 2>&1 && \
-      finished_tool "onesixtyone" "$cidr" "${sanitised_cidr_dir}onesixtyone.out" &
+    onesixtyone -c "$(locate "SNMP/snmp.txt" -l 1)" "$cidr" -w 100 >> "${cidr_dir}"onesixtyone.out 2>&1 && \
+      finished_tool "onesixtyone" "$cidr" "${cidr_dir}onesixtyone.out" &
   else
     printf "%b[!] CIDR range %bNOT%b detected. Remember you can also pass a range in CIDR notation to use enum tools that scan a wide range with '%bautoenum -r <IP address>/<network mask>%b'%b\n" "${YELLOW}" "${RED}" "${YELLOW}" "${BLUE}" "${YELLOW}" "${RESTORE}" 
   fi
@@ -274,7 +273,7 @@ ports_iterator() {
   dir_list_medium=$(locate "directory-list-2.3-medium.txt" -l 1) && \
     printf "%b[+] Found directory wordlist for web fuzzers.\n\tUsing '%b%s%b'%b\n" "${GREEN}" "${YELLOW}" "${dir_list_medium}" "${GREEN}" "${RESTORE}"
   darkweb_top1000=$(locate "darkweb2017-top1000.txt" -l 1) && \
-    printf "%b[+] Found passwords wordlist for password sprayers.\n\tUsing '%b%s%b'%b'\n\n" "${GREEN}" "${YELLOW}" "${darkweb_top1000}" "${GREEN}" "${RESTORE}" 
+    printf "%b[+] Found passwords wordlist for password sprayers.\n\tUsing '%b%s%b'%b\n\n" "${GREEN}" "${YELLOW}" "${darkweb_top1000}" "${GREEN}" "${RESTORE}" 
   else
     dir_list_medium=$(locate "directory-list-2.3-medium.txt" -l 1)
     darkweb_top1000=$(locate "darkweb2017-top1000.txt" -l 1)
@@ -382,13 +381,33 @@ ports_iterator() {
         fi
       fi 
       ;;
-    111)
-      printf "%b[+] RPC service detected. Running RPC nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
-      rpc_dir="${dir}rpc/"; custom_mkdir "$rpc_dir"
+    110|143|993|995)
+      if [ ! -d "${dir}imap_pop3/" ]; then
+        printf "%b[+] IMAP / POP3 service detected. Running IMAP / POP3 enum scripts.%b\n" "${GREEN}" "${RESTORE}"
+        imap_pop3_dir="${dir}imap_pop3/"; custom_mkdir "$imap_pop3_dir" 
 
-      if [ "$verbose" -eq 1 ]; then running_tool "Nmap for RPC on UDP"; fi
-      nmap -n -Pn -sVC -p 111 -sU "${1}" -oN "${rpc_dir}"rpc_nmap_udp_scan.nmap >> "${rpc_dir}rpc_udp_tailable_nmap_scan" 2>&1 && \
-        finished_tool "Nmap for RPC on UDP" "${1}" "${rpc_dir}rpc_udp_nmap_scan.nmap" &
+        if [ "$verbose" -eq 1 ]; then running_tool "Nmap for IMAP / POP3"; fi
+        nmap "${1}" -sVC -p110,143,993,995 >> "${imap_pop3_dir}imap_pop3_nmap_scan.out" 2>&1 && \
+          finished_tool "Nmap for IMAP / POP3" "${1}" "${imap_pop3_dir}imap_pop3_nmap_scan.out" &
+        
+        if [ "$verbose" -eq 1 ]; then running_tool "OpenSSL for IMAP"; fi
+        openssl s_client -connect "${1}":imaps > "${imap_pop3_dir}openssl_imap.out" 2>&1 && \
+          finished_tool "OpenSSL for IMAP" "${1}" "${imap_pop3_dir}openssl_imap.out" &
+
+        # TODO: implement banner grabbing
+        # nc -nv "${1}" 110 > "${imap_pop3_dir}110_banner_grab.out" 2>&1 || \
+        #   finished_tool "OpenSSL for IMAP" "${1}" "${imap_pop3_dir}110_banner_grab.out" &  
+      fi
+      ;;
+    111)
+      if [ ! -d "${dir}"rpc/ ]; then
+        printf "%b[+] RPC service detected. Running RPC nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
+        rpc_dir="${dir}rpc/"; custom_mkdir "$rpc_dir"
+  
+        if [ "$verbose" -eq 1 ]; then running_tool "Nmap for RPC on UDP"; fi
+        nmap -n -Pn -sVC -p 111 -sU "${1}" >> "${rpc_dir}rpc_udp_tailable_nmap_scan" 2>&1 && \
+          finished_tool "Nmap for RPC on UDP" "${1}" "${rpc_dir}rpc_udp_nmap_scan.nmap" &
+      fi
       ;;
     137|138|139|445)
       # Run only once
@@ -448,26 +467,25 @@ ports_iterator() {
         tree "${dir}"mounted_NFS_contents/ >> "${dir}tree_nfs_directory.out" 2>&1 && \
         finished_tool "Showmount + mount" "${1}" "${dir}showmount.out && cat ${dir}tree_nfs_directory.out" &
       ;;
-    
-      # 512)
-      #  hydra
-      #  ;;
-      # 513)
-      #  hydra  
-      #  ;;
-      # 514)
-      #  hydra
-      #  ;;
-      # 554|8554)
-      #  hydra
-      #  ;;
-      # 1521)
-      #  tool x
-      #  ;;
-      # To add:
-      #   - SQL
-      #   - rsync (873)
-      #   - rtsp -> hydra (554, 8554)
+  # 512)
+  #  hydra
+  #  ;;
+  # 513)
+  #  hydra  
+  #  ;;
+  # 514)
+  #  hydra
+  #  ;;
+  # 554|8554)
+  #  hydra
+  #  ;;
+  # 1521)
+  #  tool x
+  #  ;;
+  # To add:
+  #   - SQL
+  #   - rsync (873)
+  #   - rtsp -> hydra (554, 8554)
     *)
       # Hiding message if verbose flag is disabled, since this can be very noisy for high RPC ports
       if [ "$verbose" -eq 1 ]; then 
@@ -561,8 +579,7 @@ main() {
 # ---------- Script checks, ensuring everything is ready to run ----------
 
 # Check 0: Launch fancy (Bruce) Banner! 
-if [ "$quiet" -eq 0 ]; then print_hulk; fi # Ba-dum-tss!
-if [ "$verbose" -eq 1 ]; then print_phase 0; fi
+if [ "$verbose" -eq 1 ]; then print_hulk; print_phase 0; fi # Ba-dum-tss!
 
 # Check 1: help flag passed?
 if [ -n "$do_help" ]; then
@@ -571,8 +588,8 @@ if [ -n "$do_help" ]; then
 fi
 
 # Check 2: Ensure there is a target
-if [[ -n "$1" ]]; then
-  IP="$1"
+if [[ -n "$ip" ]]; then
+  IP="$ip"
 else
   error_msg "You must provide an IP address or targets file to start the attack"
 fi
