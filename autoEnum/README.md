@@ -24,24 +24,27 @@ _  __ `/  / / /  __/  __ \_  __/  __  __ \  / / /_  __ `__ \
 \__,_/ \__,_/ \__/ \____//_____/  /_/ /_/\__,_/ /_/ /_/ /_/ 
                     by 0x5ubt13                             
    
-Usage: autoenum [OPTIONS] <Single target's IP / Targets file>
-	-h : Help      - Display this help and exit.
-	-v : Verbose   - Increase verbosity of the script. Recommended!
-	-q : Quiet     - Don't print the cool banner.
-	-r : Range     - Specify a CIDR range to use tools for whole subnets.
-	-t : Top ports - Run port sweep with nmap and the flag --top-ports=<your input>
-	-d : DNS       - Specify custom DNS servers. Default option: -n.
+Usage: autoenum [OPTIONS] -t <Single target's IP / Targets file>
+	-a: Again     - Repeat the scan and compare with initial ports discovered.
+	-d: DNS       - Specify custom DNS servers. Default option: -n.
+	-h: Help      - Display this help and exit.
+	-p: top Ports - Run port sweep with nmap and the flag --top-ports=<your input>
+	-q: Quiet     - Don't print the cool banner and decrease overall verbosity.
+	-r: Range     - Specify a CIDR range to use tools for whole subnets.
+	-s: Slower    - Don't use Rustscan for the initial port sweep.
+	-t: Target    - Specify target single IP / List of IPs file.
 
 Examples:
-	autoenum 192.168.142.93
-	autoenum -vq 192.168.142.93
-	autoenum 10.129.121.60 -d <serv1[,serv2],...>
-	autoenum 10.129.121.60 -r 10.129.121.0/24
-	autoenum targets_file.txt -r 10.10.8.0/24 
+	autoenum -t 192.168.142.93
+	autoenum -qa -t 192.168.142.93
+	autoenum -t 10.129.121.60 -d <serv1[,serv2],...>
+	autoenum -r 10.129.121.0/24 -t 10.129.121.60 
+	autoenum -t targets_file.txt -r 10.10.8.0/24 
 ~~~
 
 ## Wrapped tools currently present
 
+- Braa
 - CrackMapExec
 - Enum4linux
 - Ffuf
@@ -58,6 +61,7 @@ Examples:
 - SMBMap
 - SNMPWalk
 - WPScan
+- Xsltproc
 
 ## Tools yet to implement
 

@@ -38,7 +38,7 @@ shift $((OPTIND-1))
 
 # Print usage and exit
 usage() {
-  printf "\n%bUsage: %b%s [OPTIONS] <Single target's IP/Targets file>\n" "${GREEN}" "${RESTORE}" "$(basename "$0")"
+  printf "\n%bUsage: %b%s [OPTIONS] -t <Single target's IP/Targets file>\n" "${GREEN}" "${RESTORE}" "$(basename "$0")"
   printf "%b\t-a:%b Again     - Repeat the scan and compare with initial ports discovered.\n" "${YELLOW}" "${RESTORE}"
   printf "%b\t-d:%b DNS       - Specify custom DNS servers. Default option: %b-n%b.\n" "${YELLOW}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
   printf "%b\t-h:%b Help      - Display this help and exit.\n" "${YELLOW}" "${RESTORE}"
@@ -47,7 +47,7 @@ usage() {
   printf "%b\t-r:%b Range     - Specify a CIDR range to use tools for whole subnets.\n" "${YELLOW}" "${RESTORE}" 
   printf "%b\t-s:%b Slower    - Don't use Rustscan for the initial port sweep.\n" "${YELLOW}" "${RESTORE}"
   printf "%b\t-t:%b Target    - Specify target single IP / List of IPs file.\n" "${YELLOW}" "${RESTORE}"
-  printf "%b\nExamples:\n\t%s -t 192.168.142.93\n\t%s %b-qa -t%b 192.168.142.93\n\t%s -t 10.129.121.60 %b-d%b <serv1[,serv2],...>\n\t%s -t 10.129.121.60 %b-r%b 10.129.121.0/24\n\t%s -t targets_file.txt %b-r%b 10.10.8.0/24%b" "${GREEN}" "$(basename "$0")" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "${RESTORE}"
+  printf "%b\nExamples:\n\t%s %b-t%b 192.168.142.93\n\t%s %b-qa -t%b 192.168.142.93\n\t%s %b-t%b 10.129.121.60 %b-d%b <serv1[,serv2],...>\n\t%s %b-t%b 10.129.121.60 %b-r%b 10.129.121.0/24\n\t%s %b-t%b targets_file.txt %b-r%b 10.10.8.0/24%b" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "${YELLOW}" "${GREEN}" "${RESTORE}"
   exit 1
 }
 
@@ -172,8 +172,9 @@ ports_sweep() {
     fi
   fi
   
-  # Add and merge an UDP scan
-  ports="$ports,"$(nmap --min-rate=2000 -sU -p161 -T5 --open "$ping" "$1" 2>/dev/null | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")
+  # Add and merge to ports an UDP scan.
+  # TODO: only currently supporting the scan of SNMP. More to add, dependant on time consume
+  ports="${ports}","$(nmap --min-rate=2000 -sU -p161 -T5 --open "$ping" "$1" 2>/dev/null | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")"
 
   # Check whether there are ports in the var
   if [ -z "$ports" ]; then
@@ -207,10 +208,7 @@ ports_sweep() {
       echo "$ports" > "${2}"open_ports.txt
       printf "%b[+] Done! Found open ports on target.\n\tOpen ports in %b'%s'%b: %b%s\n%b[+] Saved as '%b%sopen_ports.txt%b' in nmap-friendly format.%b\n" "${GREEN}" "${RESTORE}" "${1}" "${GREEN}" "${RESTORE}" "${ports}" "${GREEN}" "${RESTORE}" "${2}" "${GREEN}" "${RESTORE}"
     fi
-  fi   
-
-  # Scan 161 UDP
-  nmap 
+  fi
 }
 
 # Proceed with an aggressive scan
@@ -445,16 +443,20 @@ ports_iterator() {
       fi
       ;;
     161)
+      # TODO: Hold on all SNMP enumeration until onesixtyone has finished bruteforcing community strings, then launch the tools in a loop against all the found CS
       printf "%b[+] SNMP detected. Running SNMP enum tools.%b\n" "${GREEN}" "${RESTORE}"
       snmp_dir="${dir}snmp/"; custom_mkdir "$snmp_dir"
       
-      if [ "$verbose" -eq 1 ]; then running_tool "SNMPWalk v1"; fi
-      snmpwalk -v1 -c public "${1}" >> "${snmp_dir}snmpwalk_v1_public.out" 2>&1 && \
-        finished_tool "SNMPWalk v1" "${1}" "${snmp_dir}snmpwalk_v1_public.out" &
+      # Same/very similar output detected from v1 and v2c, commenting out v1 for now 
+      #if [ "$verbose" -eq 1 ]; then running_tool "SNMPWalk v1"; fi
+      #snmpwalk -v1 -c public "${1}" >> "${snmp_dir}snmpwalk_v1_public.out" 2>&1 && \
+      #  grep "= STRING:" "${snmp_dir}snmpwalk_v2c_public.out" > "${snmp_dir}snmpwalk_v2c_public_strings.out" && \
+      #  finished_tool "SNMPWalk v1" "${1}" "${snmp_dir}snmpwalk_v1_public.out" &
 
       if [ "$verbose" -eq 1 ]; then running_tool "SNMPWalk v2c"; fi
       snmpwalk -v2c -c public "${1}" >> "${snmp_dir}snmpwalk_v2c_public.out" 2>&1 && \
-        finished_tool "SNMPWalk v2c" "${1}" "${snmp_dir}snmpwalk_v2c_public.out" &
+        grep "= STRING:" "${snmp_dir}snmpwalk_v2c_public.out" > "${snmp_dir}snmpwalk_v2c_public_strings.out" && \
+        finished_tool "SNMPWalk v2c" "${1}" "${snmp_dir}snmpwalk_v2c_public_strings.out" &
 
       if [ "$verbose" -eq 1 ]; then running_tool "OneSixtyOne"; fi
       onesixtyone -c "$(locate SNMP/snmp.txt -l 1)" "${1}" >> "${snmp_dir}onesixtyone.out" 2>&1 && \
@@ -465,9 +467,8 @@ ports_iterator() {
         finished_tool "Nmap scripts for SNMP" "${1}" "${snmp_dir}snmp_nmap_scan.out" &
 
       if [ "$verbose" -eq 1 ]; then running_tool "Braa"; fi
-      braa "public@${1}:.1.3.6.*" >> "${snmp_dir}onesixtyone.out" 2>&1 && \
-        finished_tool "enum4linux" "${1}" "${snmp_dir}onesixtyone.out" &
-      
+      braa "public@${1}:.1.3.6.*" >> "${snmp_dir}braa.out" 2>&1 && \
+        finished_tool "braa" "${1}" "${snmp_dir}braa.out" &
       ;;
     389|636|3268|3269)
       # Run only once
@@ -540,9 +541,7 @@ main() {
   # Check whether input is a single or multiple target and loop accordingly
   if [[ ! -f "$IP" ]]; then 
     # ---------- Single target ----------
-    dir="${DIR}${IP}/"; custom_mkdir "$dir"
-    
-    printf "%b" "${RED}"; mkdir "${dir}"; printf "%b" "${RESTORE}"
+    dir="${DIR}${IP}/"; custom_mkdir "${dir}"
     printf "%b[+] Using '%b%s%b' as single target IP and '%b%s%b' for all the tools output%b\n" "${GREEN}" "${RESTORE}" "${IP}" "${GREEN}" "${RESTORE}" "${dir}" "${GREEN}" "${RESTORE}"
 
     # Checking whether the target is reachable via ping
