@@ -50,30 +50,33 @@ Examples:
 - Ffuf
 - Gobuster
 - Hydra
+- Metasploit
 - Nbtscan-unixwiz
 - Nikto
 - Nmap
 - Nmblookup
 - Ldapsearch
+- ODAT
 - Onesixtyone
 - Responder-RunFinger
 - Rustscan
 - SMBMap
 - SNMPWalk
+- SSH-Audit
 - WPScan
 - Xsltproc
 
 ## Tools yet to implement
 
-Do you have any other suggestion? Send a PR or a message!
+- Do you have any other suggestion? Send a PR or a message!
 
 ## Installation
 
 *Rustscan is **no longer** a forced pre-requisite, so if you don't have it, no worries, the initial port sweep will be run with nmap instead. If you don't want to run the [install_requisites](./install_requisites.sh) script, you can try to grab the script and run it, if you have all the tools necessary*
 
-Since this script uses multiple enumeration tools used in Penetration Test engagements, it is expected you will be using a distro like `Kali Linux` or `Pwnbox`. All the packages that don't normally come pre-installed in Kali (currently `Seclists` and `Rustscan`), are featured in the [install_requisites](./install_requisites.sh) script that you can find in this folder. Run it to automatically update your distro, install `Seclists`, `Homebrew` and `Rustscan` for you if you don't have them yet, and it will also symlink the script to your `/usr/bin` folder, you'll be able to call it just issuing `autoenum`.
+Since this script uses multiple enumeration tools used in Penetration Test engagements, it is expected you will be using a distro like `Kali Linux` or `Pwnbox`. All the packages that don't normally come pre-installed in `Kali` (`Seclists` and `Rustscan`, at the time of writing), are featured in the [install_requisites](./install_requisites.sh) script that you can find in this folder. Run it to automatically update your distro, install `Seclists`, `Homebrew`, `Rustscan`, `SSH-Audit` and `ODAT` for you if you don't have them yet, and it will also symlink `autoEnum` to your `/usr/bin` folder; you'll be able to call it by just issuing `autoenum`.
 
-There are other checks involved, like the presence of `locate`, which should cover the installation for other non-Kali-but-Debian-based distros. If you spot an error, please report it and I will adjust as necessary. Also, installation for other distros, like Arch-based or RHEL-based will be considered on a request basis.
+There are other checks involved, like the presence of `locate`, which should cover the installation for other non-Kali-but-Debian-based distros, although Kali, for ease of use, is recommended for package compatibility. If you spot an error, please report it and I will adjust as necessary. Also, installation for other distros, like Arch-based or RHEL-based will be considered on a request basis.
 
 To run the installer, copy & paste the following:
 
@@ -95,6 +98,7 @@ cd mytoolkit/autoEnum/
 - [ ] Finish the core script
 - [ ] Test thoroughly
 - [ ] Containerise
+- [ ] Improve the way output is presented to terminal
 - [ ] Convert to POSIX compliant
 - [ ] Add MOAR enum tools
 - [ ] Enumerate all things (legally!)
