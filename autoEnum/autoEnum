@@ -304,7 +304,7 @@ ports_iterator() {
         finished_tool "Nmap scripts for SSH" "${1}" "${ssh_dir}ssh_enum.nmap" &
 
       if [ "$verbose" -eq 1 ]; then running_tool "SSH-Audit"; fi
-      ssh-audit >> "${ssh_dir}ssh_audit.out" 2>&1 && \
+      ssh-audit "${1}" >> "${ssh_dir}ssh_audit.out" 2>&1 && \
         finished_tool "SSH-Audit" "${1}" "${ssh_dir}ssh_enum.nmap" &
       # TODO: add hydra and try to force a list of low-hanging fruit user+pass
       ;;
@@ -505,6 +505,7 @@ ports_iterator() {
           finished_tool "rusers" "${1}" "${r_services_dir}rusers.out" &
         printf "Enumerate NFS, etc on the target server for /home/user/.rhosts and /etc/hosts.equiv files to use with rlogin, rsh and rexec.\nIf found, use the following command: rlogin %s -l found_user" "${1}" >> "${r_services_dir}r_services_next_steps_readme.tip"
       fi
+      # TODO: implement some light bruteforcing for quick wins
       ;;
     623)
       if [ ! -d "${dir}ipmi/" ]; then
@@ -588,6 +589,7 @@ ports_iterator() {
         if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for MySQL"; fi
         nmap -sVC -n -v -Pn -p3306 "${1}" --script "mysql*" >> "${mysql_dir}"mysql_enum.nmap 2>&1 && \
           finished_tool "Nmap scripts for MySQL" "${1}" "${mysql_dir}mysql_enum.nmap" &
+        # TODO: implement some light bruteforcing for quick wins
       fi
       ;;
     3389)
@@ -600,12 +602,21 @@ ports_iterator() {
           finished_tool "Nmap scripts for RDP" "${1}" "${rdp_dir}rdp_enum.nmap" &
       fi
       ;;
+    5985|5986)
+      if [ ! -d "${dir}winrm/" ]; then
+        printf "%b[+] WinRM service detected. Running WinRM enum tools%b\n" "${GREEN}" "${RESTORE}" 
+        winrm_dir="${dir}winrm/"; custom_mkdir "$winrm_dir"
+
+        if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for WinRM"; fi
+        nmap -sVC -v -p5985,5986 --disable-arp-ping -n "${1}" >> "${winrm_dir}"winrm_enum.nmap 2>&1 && \
+          finished_tool "Nmap scripts for WinRM" "${1}" "${winrm_dir}winrm_enum.nmap" &
+        # TODO: implement some light bruteforcing for quick wins
+      fi
+      ;;
   # 554|8554)
   #  hydra
   #  ;;
   # To add:
-  #   - SQL
-  #   - rsync (873)
   #   - rtsp -> hydra (554, 8554)
     *)
       # Hiding message if verbose flag is disabled, since this can be very noisy for high RPC ports

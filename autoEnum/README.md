@@ -66,6 +66,8 @@ Examples:
 - WPScan
 - Xsltproc
 
+And many more doing the magic tricks!!
+
 ## Tools yet to implement
 
 - Do you have any other suggestion? Send a PR or a message!
