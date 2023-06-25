@@ -573,12 +573,17 @@ ports_iterator() {
           finished_tool "Nmap scripts for NFS" "${1}" "${nfs_dir}nfs_enum.nmap" &
         
         if [ "$verbose" -eq 1 ]; then running_tool "Showmount + mount"; fi
-        showmount -e "${1}" >> "${dir}"showmount.out 2>&1 && \
-          mkdir "${dir}"mounted_NFS_contents/ && \
-          mount -t nfs "${1}":/ "${dir}"mounted_NFS_contents/ - && \
-          tree "${dir}"mounted_NFS_contents/ >> "${dir}tree_nfs_directory.out" 2>&1 && \
-          finished_tool "Showmount + mount" "${1}" "${dir}showmount.out && cat ${nfs_dir}tree_nfs_directory.out" && \
-          printf "To clean up and unmount the NFS drive, run 'umount -v '%s'\n" "${nfs_dir}mounted_NFS_contents/" > "${nfs_dir}cleanup_readme.txt" &
+        showmount -e "${1}" >> "${nfs_dir}"showmount.out 2>&1 && \
+          custom_mkdir "${nfs_dir}"mounted_NFS_contents/ && \
+          # While loop to mount every found drive with showmount:
+          grep "/" < "${nfs_dir}"showmount.out | cut -d " " -f1 | while IFS= read -r dir_to_mount
+          do
+            custom_mkdir "${nfs_dir}mounted_NFS_contents/${dir_to_mount}/"
+            mount -t nfs "${1}":/"${dir_to_mount}" "${nfs_dir}"mounted_NFS_contents/ -o nolock
+          done && \
+          tree "${nfs_dir}"mounted_NFS_contents/ >> "${nfs_dir}nfs_mounts.tree" 2>&1 && \
+          finished_tool "Showmount + mount" "${1}" "${nfs_dir}showmount.out && cat ${nfs_dir}nfs_mounts.tree" && \
+          printf "To clean up and unmount the NFS drive, run 'umount -v '%s'/(mounted dirs)\n" "${nfs_dir}mounted_NFS_contents/" > "${nfs_dir}cleanup_readme.txt" &
       fi
       ;;
     3306)
