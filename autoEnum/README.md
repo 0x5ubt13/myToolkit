@@ -65,6 +65,8 @@ Examples:
 - SSH-Audit
 - WPScan
 - Xsltproc
+- WhatWeb
+- WafW00f
 
 And many more doing the magic tricks!!
 

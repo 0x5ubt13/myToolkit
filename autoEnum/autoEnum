@@ -79,7 +79,9 @@ answers_icmp() {
 }
 
 running_tool() {
-  printf "%b[!] Starting %b%s%b and sending it to the background.%b\n" "${YELLOW}" "${BLUE}" "${1}" "${YELLOW}" "${RESTORE}"
+  if [ "$verbose" -eq 1 ]; then
+    printf "%b[!] Starting %b%s%b and sending it to the background.%b\n" "${YELLOW}" "${BLUE}" "${1}" "${YELLOW}" "${RESTORE}"
+  fi
 }
 
 finished_tool() {
@@ -248,15 +250,15 @@ cidr_enumeration() {
     # Run range tools
     if [ "$verbose" -eq 1 ]; then printf "%b[+]%b -r%b flag detected. Proceeding to scan CIDR range with dedicated range enumeration tools.\n%b" "${GREEN}" "${YELLOW}" "${GREEN}" "${RESTORE}"; fi
     
-    if [ "$verbose" -eq 1 ]; then running_tool "nbtscan-unixwiz"; fi 
+    running_tool "nbtscan-unixwiz" 
     nbtscan-unixwiz -f "$cidr" >> "${cidr_dir}"nbtscan-unixwiz.out 2>&1 && \
       finished_tool "nbtscan-unixwiz" "$cidr" "${cidr_dir}nbtscan-unixwiz.out" &
     
-    if [ "$verbose" -eq 1 ]; then running_tool "Responder-RunFinger"; fi
+    running_tool "Responder-RunFinger"
     responder-RunFinger -i "$cidr" >> "${cidr_dir}"runfinger.out 2>&1 && \
       finished_tool "responder-RunFinger" "$cidr" "${cidr_dir}runfinger.out" &
     
-    if [ "$verbose" -eq 1 ]; then running_tool "onesixtyone"; fi
+    running_tool "onesixtyone"
     onesixtyone -c "$(locate "SNMP/snmp.txt" -l 1)" "$cidr" -w 100 >> "${cidr_dir}"onesixtyone.out 2>&1 && \
       finished_tool "onesixtyone" "$cidr" "${cidr_dir}onesixtyone.out" &
   else
@@ -290,7 +292,7 @@ ports_iterator() {
       printf "%b[+] FTP service detected. Running FTP nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
       ftp_dir="${dir}ftp/"; custom_mkdir "$ftp_dir"
       
-      if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for FTP"; fi
+      running_tool "Nmap scripts for FTP"
       nmap -sV -n -Pn -p21 "${1}" --script "ftp-* and not brute" -v >> "${ftp_dir}"ftp_enum.nmap 2>&1 && \
         finished_tool "Nmap scripts for FTP" "${1}" "${ftp_dir}ftp_enum.nmap" &
       # TODO: add hydra and try to force a list of low-hanging fruit user+pass
@@ -299,11 +301,11 @@ ports_iterator() {
       printf "%b[+] SSH service detected. Running SSH nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
       ssh_dir="${dir}ssh/"; custom_mkdir "$ssh_dir"
 
-      if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for SSH"; fi
+      running_tool "Nmap scripts for SSH"
       nmap -sVC -v -n -Pn -p22 "${1}" --script "ssh* and not brute" >> "${ssh_dir}ssh_enum.nmap" 2>&1 && \
         finished_tool "Nmap scripts for SSH" "${1}" "${ssh_dir}ssh_enum.nmap" &
 
-      if [ "$verbose" -eq 1 ]; then running_tool "SSH-Audit"; fi
+      running_tool "SSH-Audit"
       ssh-audit "${1}" >> "${ssh_dir}ssh_audit.out" 2>&1 && \
         finished_tool "SSH-Audit" "${1}" "${ssh_dir}ssh_enum.nmap" &
       # TODO: add hydra and try to force a list of low-hanging fruit user+pass
@@ -314,7 +316,7 @@ ports_iterator() {
         printf "%b[+] SMTP service detected. Running SMTP enum tools in port %s%b\n" "${GREEN}" "${port}" "${RESTORE}" 
         smtp_dir="${dir}smtp/"; custom_mkdir "$smtp_dir"
 
-        if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for SMTP"; fi
+        running_tool "Nmap scripts for SMTP"
         nmap -sV -n -Pn -p"$port" --script "smtp-commands,smtp-enum-users,smtp-open-relay" "$1" -v >> "${smtp_dir}"smtp_enum.nmap 2>&1 && \
           finished_tool "Nmap scripts for SMTP" "${1}" "${smtp_dir}smtp_enum.nmap" &
         fi
@@ -323,7 +325,7 @@ ports_iterator() {
       printf "%b[+] SSH service detected. Running SSH nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
       dns_dir="${dir}dns/"; custom_mkdir "$dns_dir"
 
-      if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for DNS"; fi
+      running_tool "Nmap scripts for DNS"
       nmap -n -p53 --script "(default and *dns*) or fcrdns or dns-srv-enum or dns-random-txid or dns-random-srcport" "$1" -v >> "${dns_dir}"dns_nmap_scan.out 2>&1 && \
         finished_tool "Nmap scripts for DNS" "${1}" "${dns_dir}dns_nmap_scan.out" &
       ;;
@@ -332,16 +334,24 @@ ports_iterator() {
       http_dir="${dir}http/"; custom_mkdir "$http_dir" 
       if [ "$port" -eq 80 ]; then
         printf "%b[+] Running Web enum tools in port 80%b\n" "${GREEN}" "${RESTORE}"
-         
-        if [ "$verbose" -eq 1 ]; then running_tool "Nikto on port 80"; fi
-        nikto -host "${1}" >> "${http_dir}"nikto_tailable_80.out 2>&1 && \
+        
+        running_tool "Nikto on port 80"
+        nikto -host "${1}" >> "${http_dir}nikto_80.out" 2>&1 && \
           finished_tool "Nikto" "${1}" "${http_dir}nikto_80.out" &
+
+        running_tool "wafw00f on port 80"
+        wafw00f -v http://"${1}":80 >> "${http_dir}wafw00f_80.out" 2>&1 && \
+          finished_tool "wafw00f on port 80" "${1}" "${http_dir}wafw00f_80.out" &
+
+        running_tool "WhatWeb on port 80"
+        whatweb -a 3 -v http://"${1}":80 >> "${http_dir}whatweb_80.out" 2>&1 && \
+          finished_tool "WhatWeb on port 80" "${1}" "${http_dir}whatweb_80.out" &
         
         # ffuf killswitch activated after 5 mins of running to save energy and avoid dangling processes consuming CPU
         if [ -n "$dir_list_medium" ]; then
-          if [ "$verbose" -eq 1 ]; then running_tool "ffuf on port 80"; fi
-          ffuf -u http://"${1}":80/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 >> "${http_dir}"ffuf_80_tailable.out 2>&1 && \
-            finished_tool "ffuf" "${1}" "${http_dir}ffuf_tailable_80.out" &
+          running_tool "ffuf on port 80"
+          ffuf -u http://"${1}":"${port}"/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 >> "${http_dir}ffuf_80.out" 2>&1 && \
+            finished_tool "ffuf" "${1}" "${http_dir}ffuf_80.out" &
         else
           printf "%b[-] Error: %bmedium directory wordlist not found. Aborting web fuzzing on port 80." "${RED}" "${RESTORE}"
         fi
@@ -350,15 +360,23 @@ ports_iterator() {
         # Common Web 
         printf "%b[+] Running Web enum tools in port 443%b\n" "${GREEN}" "${RESTORE}"
   
-        if [ "$verbose" -eq 1 ]; then running_tool "Nikto"; fi
+        running_tool "Nikto on port 443"
         nikto -host "${1}" >> "${http_dir}"nikto_tailable_443.out 2>&1 && \
-          finished_tool "Nikto on port 443" "${1}" "${http_dir}nikto_tailable_443.out" &
-  
+          finished_tool "Nikto on port 443" "${1}" "${http_dir}nikto_443.out" &
+        
+        running_tool "wafw00f on port 443"
+        wafw00f -v https://"${1}":443 >> "${http_dir}wafw00f_443.out" 2>&1 && \
+          finished_tool "wafw00f on port 443" "${1}" "${http_dir}wafw00f_443.out" &
+
+        running_tool "WhatWeb on port 443"
+        whatweb -a 3 -v https://"${1}":443 >> "${http_dir}whatweb_443.out" 2>&1 && \
+          finished_tool "WhatWeb on port 443" "${1}" "${http_dir}whatweb_443.out" &
+        
         # ffuf killswitch activated after 5 mins of running to save energy and avoid dangling processes consuming CPU
         if [ -z "$dir_list_medium" ]; then
-          if [ "$verbose" -eq 1 ]; then running_tool "ffuf on port 443"; fi
-          ffuf -u https://"${1}":443/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 >> "${http_dir}"ffuf_443_tailable.out 2>&1 && \
-            finished_tool "ffuf on port 443" "${1}" "${http_dir}ffuf_tailable_443.out" &
+          running_tool "ffuf on port 443"
+          ffuf -u https://"${1}":443/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 >> "${http_dir}"ffuf_443.out 2>&1 && \
+            finished_tool "ffuf on port 443" "${1}" "${http_dir}ffuf_443.out" &
         else
           printf "%b[-] Error: %bmedium directory wordlist not found. Aborting web fuzzing on port 443." "${RED}" "${RESTORE}"
         fi
@@ -373,16 +391,16 @@ ports_iterator() {
           printf "%b[+] Web service Tomcat detected. Running Tomcat enum tools%b\n" "${GREEN}" "${RESTORE}"
     
           if [ -n "$dir_list_medium" ]; then
-            if [ "$verbose" -eq 1 ]; then running_tool "gobuster"; fi
-            gobuster -z -q dir -e -u "${1}":8080 -w "$dir_list_medium" >> "${http_dir}"gobuster_tomcat.out 2>&1 && \
+            running_tool "gobuster"
+            gobuster -z -q dir -e -u "${1}":8080 -w "$dir_list_medium" >> "${http_dir}gobuster_tomcat.out" 2>&1 && \
               finished_tool "gobuster on port 8080" "${1}" "${http_dir}gobuster_tomcat.out" &
           else
           printf "%b[-] Error: %bmedium directory wordlist not found. Aborting web fuzzing on port 8080." "${RED}" "${RESTORE}"
           fi
           if [ -n "$darkweb_top1000" ]; then
-            if [ "$verbose" -eq 1 ]; then running_tool "hydra"; fi
-            hydra -L users.txt -P "$darkweb_top1000" -f "${1}" http-get /manager/html >> "${http_dir}"hydra_tailable.out 2>&1 && \
-              finished_tool "Hydra" "${1}" "${http_dir}hydra_tailable.out" &
+            running_tool "hydra"
+            hydra -L users.txt -P "$darkweb_top1000" -f "${1}" http-get /manager/html >> "${http_dir}"hydra.out 2>&1 && \
+              finished_tool "Hydra" "${1}" "${http_dir}hydra.out" &
           else
           printf "%b[-] Error: %bdarkweb_top1000 wordlist not found. Aborting bruteforcing with hydra on port 8080." "${RED}" "${RESTORE}"
           fi
@@ -394,11 +412,11 @@ ports_iterator() {
         printf "%b[+] IMAP / POP3 service detected. Running IMAP / POP3 enum scripts.%b\n" "${GREEN}" "${RESTORE}"
         imap_pop3_dir="${dir}imap_pop3/"; custom_mkdir "$imap_pop3_dir" 
 
-        if [ "$verbose" -eq 1 ]; then running_tool "Nmap for IMAP / POP3"; fi
+        running_tool "Nmap for IMAP / POP3"
         nmap "${1}" -sVC -p110,143,993,995 >> "${imap_pop3_dir}imap_pop3_enum.nmap" 2>&1 && \
           finished_tool "Nmap for IMAP / POP3" "${1}" "${imap_pop3_dir}imap_pop3_enum.nmap" &
         
-        if [ "$verbose" -eq 1 ]; then running_tool "OpenSSL for IMAP"; fi
+        running_tool "OpenSSL for IMAP"
         openssl s_client -connect "${1}":imaps > "${imap_pop3_dir}openssl_imap.out" 2>&1 && \
           finished_tool "OpenSSL for IMAP" "${1}" "${imap_pop3_dir}openssl_imap.out" &
 
@@ -412,7 +430,7 @@ ports_iterator() {
         printf "%b[+] RPC service detected. Running RPC nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
         rpc_dir="${dir}rpc/"; custom_mkdir "$rpc_dir"
   
-        if [ "$verbose" -eq 1 ]; then running_tool "Nmap for RPC on UDP"; fi
+        running_tool "Nmap for RPC on UDP"
         nmap -n -Pn -sVC -p 111 -sU "${1}" >> "${rpc_dir}rpc_udp_enum.nmap" 2>&1 && \
           finished_tool "Nmap for RPC on UDP" "${1}" "${rpc_dir}rpc_udp_enum.nmap" &
       fi
@@ -423,23 +441,23 @@ ports_iterator() {
         printf "%b[+] NetBIOS/SMB detected. Running NB/SMB enum tools.%b\n" "${GREEN}" "${RESTORE}"
         nb_smb_dir="${dir}nb_smb/"; custom_mkdir "$nb_smb_dir"
         
-        if [ "$verbose" -eq 1 ]; then running_tool "CrackMapExec"; fi
+        running_tool "CrackMapExec"
         crackmapexec smb "${1}" --shares -u '' -p '' --shares --sessions --disks --loggedon-users --users --groups --computers --local-groups --pass-pol --rid-brute >> "${nb_smb_dir}"cme_anon.out 2>&1 && \
           finished_tool "CrackMapExec" "${1}" "${nb_smb_dir}cme_anon.out" &
         
-        if [ "$verbose" -eq 1 ]; then running_tool "SMBMap"; fi
+        running_tool "SMBMap"
         smbmap -H "${1}" >> "${nb_smb_dir}smbmap_anon.out" 2>&1 && \
           finished_tool "SMBMap" "${1}" "${nb_smb_dir}smbmap_anon.out" &
   
-        if [ "$verbose" -eq 1 ]; then running_tool "NBLookup"; fi
+        running_tool "NBLookup"
         nmblookup -A "${1}" >> "${nb_smb_dir}nmblookup.out" 2>&1 && \
           finished_tool "NMBLookup" "${1}" "${nb_smb_dir}nmblookup.out" &
     
-        if [ "$verbose" -eq 1 ]; then running_tool "enum4linux"; fi
+        running_tool "enum4linux"
         enum4linux -u '' -p '' "${1}" >> "${nb_smb_dir}enum4linux_anon.out" 2>&1 && \
           finished_tool "enum4linux" "${1}" "${nb_smb_dir}enum4linux_anon.out" & 
 
-        if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for NB/SMB"; fi
+        running_tool "Nmap scripts for NB/SMB"
         nmap -Pn -sUV -p137 -n -sV --script "nbstat.nse" "${1}" -v >> "${nb_smb_dir}nb_udp_tailable_nmap_scan.out" 2>&1 &&
           finished_tool "Nmap scripts for NetBios" "${1}" "${nb_smb_dir}nb_enum.nmap" &
         nmap -Pn -p139,445 -n -sV --script "smb* and not brute" "${1}" -v >> "${nb_smb_dir}smb_tailable_nmap_scan.out" 2>&1 && \
@@ -453,25 +471,25 @@ ports_iterator() {
         snmp_dir="${dir}snmp/"; custom_mkdir "$snmp_dir"
         
         # Same/very similar output detected from v1 and v2c, commenting out v1 for now 
-        #if [ "$verbose" -eq 1 ]; then running_tool "SNMPWalk v1"; fi
+        #running_tool "SNMPWalk v1"; fi
         #snmpwalk -v1 -c public "${1}" >> "${snmp_dir}snmpwalk_v1_public.out" 2>&1 && \
         #  grep "= STRING:" "${snmp_dir}snmpwalk_v2c_public.out" > "${snmp_dir}snmpwalk_v2c_public_strings.out" && \
         #  finished_tool "SNMPWalk v1" "${1}" "${snmp_dir}snmpwalk_v1_public.out" &
   
-        if [ "$verbose" -eq 1 ]; then running_tool "SNMPWalk v2c"; fi
+        running_tool "SNMPWalk v2c"
         snmpwalk -v2c -c public "${1}" >> "${snmp_dir}snmpwalk_v2c_public.out" 2>&1 && \
           grep "= STRING:" "${snmp_dir}snmpwalk_v2c_public.out" > "${snmp_dir}snmpwalk_v2c_public_strings.out" && \
           finished_tool "SNMPWalk v2c" "${1}" "${snmp_dir}snmpwalk_v2c_public_strings.out" &
   
-        if [ "$verbose" -eq 1 ]; then running_tool "OneSixtyOne"; fi
+        running_tool "OneSixtyOne"
         onesixtyone -c "$(locate SNMP/snmp.txt -l 1)" "${1}" >> "${snmp_dir}onesixtyone.out" 2>&1 && \
           finished_tool "OneSixtyOne" "${1}" "${snmp_dir}onesixtyone.out" &
         
-        if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for SNMP"; fi
+        running_tool "Nmap scripts for SNMP"
         nmap -sVU -p161 -n --script "snmp* and not snmp-brute" "${1}" >> "${snmp_dir}snmp_nmap_scan.out" 2>&1 && \
           finished_tool "Nmap scripts for SNMP" "${1}" "${snmp_dir}snmp_nmap_scan.out" &
   
-        if [ "$verbose" -eq 1 ]; then running_tool "Braa"; fi
+        running_tool "Braa"
         braa "public@${1}:.1.3.6.*" >> "${snmp_dir}braa.out" 2>&1 && \
           finished_tool "braa" "${1}" "${snmp_dir}braa.out" &
       fi
@@ -482,11 +500,11 @@ ports_iterator() {
         printf "%b[+] LDAP detected. Running LDAP enum tools in port %s%b\n" "${GREEN}" "${port}" "${RESTORE}" 
         ldap_dir="${dir}ldap/"; custom_mkdir "$ldap_dir"
 
-        if [ "$verbose" -eq 1 ]; then running_tool "ldapsearch (null credentials attack)"; fi
+        running_tool "ldapsearch (null credentials attack)"
         ldapsearch -x -H ldap://"${1}" -D '' -w '' -b "DC=<1_SUBDOMAIN>,DC=<TLD>" >> "${ldap_dir}ldapsearch.out" 2>&1 && \
           finished_tool "ldapsearch" "${1}" "${ldap_dir}ldapsearch.out" &
         
-        if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for LDAP"; fi
+        running_tool "Nmap scripts for LDAP"
         nmap -Pn -p"$port" -n -v -sV --script "ldap* and not brute" "${1}" >> "${ldap_dir}ldap_enum.nmap" 2>&1 && \
           finished_tool "Nmap scripts for LDAP" "${1}" "${ldap_dir}ldap_enum.nmap" &
       fi
@@ -496,11 +514,11 @@ ports_iterator() {
         printf "%b[+] R-Services detected. Running R-Services enum tools%b\n" "${GREEN}" "${RESTORE}" 
         r_services_dir="${dir}r-services/"; custom_mkdir "$r_services_dir"
         
-        if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for R-Services"; fi
+        running_tool "Nmap scripts for R-Services"
         nmap -Pn -p512,513,514 -n -v -sVC "${1}" >> "${r_services_dir}r_services_enum.nmap" 2>&1 && \
           finished_tool "Nmap scripts for R-Services" "${1}" "${r_services_dir}r_services_enum.nmap" &
 
-        if [ "$verbose" -eq 1 ]; then running_tool "rusers"; fi
+        running_tool "rusers"
         rusers -al "${1}" >> "${r_services_dir}rusers.out" && \
           finished_tool "rusers" "${1}" "${r_services_dir}rusers.out" &
         printf "Enumerate NFS, etc on the target server for /home/user/.rhosts and /etc/hosts.equiv files to use with rlogin, rsh and rexec.\nIf found, use the following command: rlogin %s -l found_user" "${1}" >> "${r_services_dir}r_services_next_steps_readme.tip"
@@ -512,11 +530,11 @@ ports_iterator() {
         printf "%b[+] IPMI detected. Running IPMI enum tools%b\n" "${GREEN}" "${RESTORE}" 
         ipmi_dir="${dir}ipmi/"; custom_mkdir "$ipmi_dir"
         
-        if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for IPMI"; fi
+        running_tool "Nmap scripts for IPMI"
         nmap -Pn -v -p"$port" -n -sUC --script "ipmi*" "${1}" >> "${ipmi_dir}ipmi_enum.nmap" 2>&1 && \
           finished_tool "Nmap scripts for IPMI" "${1}" "${ipmi_dir}ipmi_enum.nmap" &
 
-        if [ "$verbose" -eq 1 ]; then running_tool "Metasploit module for IPMI && John if successful"; fi
+        running_tool "Metasploit module for IPMI && John if successful"
         msfconsole -x "use auxiliary/scanner/ipmi/ipmi_dumphashes; set rhosts ${IP}; set output_john_file ${ipmi_dir}ipmi_hashes.john; run; exit" >> "${ipmi_dir}msf.out" 2>&1 && \
           john "${ipmi_dir}ipmi_hashes.john" >> "${ipmi_dir}john.out" && \
           finished_tool "Metasploit module for IPMI && John" "${1}" "${ipmi_dir}ipmi_enum.nmap && cat ${ipmi_dir}john.out" &
@@ -527,11 +545,11 @@ ports_iterator() {
         printf "%b[+] RSync detected. Running RSync enum tools%b\n" "${GREEN}" "${RESTORE}" 
         rsync_dir="${dir}rsync/"; custom_mkdir "$rsync_dir"
         
-        if [ "$verbose" -eq 1 ]; then running_tool "Nmap enum for RSync"; fi
+        running_tool "Nmap enum for RSync"
         nmap -Pn -v -p"$port" -n -sVC "${1}" >> "${rsync_dir}rsync_enum.nmap" 2>&1 && \
           finished_tool "Nmap scripts for RSync" "${1}" "${rsync_dir}rsync_enum.nmap" &
         
-        if [ "$verbose" -eq 1 ]; then running_tool "Netcat for RSync"; fi
+        running_tool "Netcat for RSync"
         nc -nv "${1}" "$port" >> "${rsync_dir}rsync_nc.out" 2>&1 && \
           printf "If nc's output has a drive in it after enumerating the version, for example 'dev', your natural following step should be:\n\trsync -av --list-only rsync://%s/dev" "${1}" >> "${rsync_dir}next_step_readme.tip" && \
           finished_tool "Netcat for RSync" "${1}" "${rsync_dir}rsync_nc.out && cat ${rsync_dir}next_step_readme.tip" &
@@ -542,7 +560,7 @@ ports_iterator() {
         printf "%b[+] MSSQL detected. Running MSSQL enum tools%b\n" "${GREEN}" "${RESTORE}" 
         mssql_dir="${dir}mssql/"; custom_mkdir "$mssql_dir"
         
-        if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for MSSQL"; fi
+        running_tool "Nmap scripts for MSSQL"
         nmap -sVC -n -v -Pn -p1433 "${1}" \
           --script "ms-sql-info,ms-sql-empty-password,ms-sql-xp-cmdshell,ms-sql-config,ms-sql-ntlm-info,ms-sql-tables,ms-sql-hasdbaccess,ms-sql-dac,ms-sql-dump-hashes" \
           --script-args "mssql.instance-port=1433,mssql.username=sa,mssql.password=,mssql.instance-name=MSSQLSERVER" >> "${mssql_dir}"mssql_enum.nmap 2>&1 && \
@@ -554,7 +572,7 @@ ports_iterator() {
         printf "%b[+] Oracle TNS detected. Running Oracle TNS enum tools%b\n" "${GREEN}" "${RESTORE}" 
         tns_dir="${dir}tns/"; custom_mkdir "$tns_dir"
 
-        if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for Oracle TNS"; fi
+        running_tool "Nmap scripts for Oracle TNS"
         nmap -Pn -p"$port" -sVC -v -n --script "oracle-sid-brute" "${1}" >> "${tns_dir}oracle_tns_enum.nmap" 2>&1 && \
           finished_tool "Nmap scripts for Oracle TNS" "${1}" "${tns_dir}oracle_tns_enum.nmap" &
 
@@ -568,11 +586,11 @@ ports_iterator() {
         printf "%b[+] NFS service detected. Running NFS enum tools.%b\n" "${GREEN}" "${RESTORE}"
         nfs_dir="${dir}nfs/"; custom_mkdir "$nfs_dir"
 
-        if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for NFS"; fi
+        running_tool "Nmap scripts for NFS"
         nmap -sVC -n -Pn -p2049,111 "${1}" --script "nfs-ls,nfs-showmount,nfs-statfs" -v >> "${nfs_dir}nfs_enum.nmap" 2>&1 && \
           finished_tool "Nmap scripts for NFS" "${1}" "${nfs_dir}nfs_enum.nmap" &
         
-        if [ "$verbose" -eq 1 ]; then running_tool "Showmount + mount"; fi
+        running_tool "Showmount + mount"
         showmount -e "${1}" >> "${nfs_dir}"showmount.out 2>&1 && \
           custom_mkdir "${nfs_dir}"mounted_NFS_contents/ && \
           # While loop to mount every found drive with showmount:
@@ -591,7 +609,7 @@ ports_iterator() {
         printf "%b[+] MySQL detected. Running MySQL enum tools%b\n" "${GREEN}" "${RESTORE}" 
         mysql_dir="${dir}mysql/"; custom_mkdir "$mysql_dir"
         
-        if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for MySQL"; fi
+        running_tool "Nmap scripts for MySQL"
         nmap -sVC -n -v -Pn -p3306 "${1}" --script "mysql*" >> "${mysql_dir}"mysql_enum.nmap 2>&1 && \
           finished_tool "Nmap scripts for MySQL" "${1}" "${mysql_dir}mysql_enum.nmap" &
         # TODO: implement some light bruteforcing for quick wins
@@ -602,7 +620,7 @@ ports_iterator() {
         printf "%b[+] RDP detected. Running RDP enum tools%b\n" "${GREEN}" "${RESTORE}" 
         rdp_dir="${dir}rdp/"; custom_mkdir "$rdp_dir"
 
-        if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for RDP"; fi
+        running_tool "Nmap scripts for RDP"
         nmap -sVC -n -v -Pn -p"$port" "${1}" --script "rdp*" >> "${rdp_dir}"rdp_enum.nmap 2>&1 && \
           finished_tool "Nmap scripts for RDP" "${1}" "${rdp_dir}rdp_enum.nmap" &
       fi
@@ -612,7 +630,7 @@ ports_iterator() {
         printf "%b[+] WinRM service detected. Running WinRM enum tools%b\n" "${GREEN}" "${RESTORE}" 
         winrm_dir="${dir}winrm/"; custom_mkdir "$winrm_dir"
 
-        if [ "$verbose" -eq 1 ]; then running_tool "Nmap scripts for WinRM"; fi
+        running_tool "Nmap scripts for WinRM"
         nmap -sVC -v -p5985,5986 --disable-arp-ping -n "${1}" >> "${winrm_dir}"winrm_enum.nmap 2>&1 && \
           finished_tool "Nmap scripts for WinRM" "${1}" "${winrm_dir}winrm_enum.nmap" &
         # TODO: implement some light bruteforcing for quick wins
@@ -773,4 +791,4 @@ if [ "$verbose" -eq 1 ]; then print_phase 4; fi
 END="$(date +%s)"
 runtime="$((END - START))"
 printf "%b[*] All done! It only took '%b%s seconds%b' to run autoEnum based on your settings!! Please allow your tools some time to finish.%b" "${BLUE}" "${GREEN}" "$runtime" "${BLUE}" "${RESTORE}"
-printf "\n\n%b[*] %s" "${BLUE}" "This tool is still in its early days. Do you have any feedback? Please feel free to reach out: https://github.com/0x5ubt13"
+printf "\n\n%b[*] %s" "${BLUE}" "This tool is still in its early days. Do you have any feedback? Please feel free to reach out: 5ubt13@protonmail.com"
