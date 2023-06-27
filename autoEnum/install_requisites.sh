@@ -9,7 +9,7 @@ YELLOW="\033[33m"
 # ---------- Installation ----------
 # Making sure we're not SU
 if [ "$EUID" -eq 0 ]; then 
-  printf "%b[-]%b Please don't run this script as root 💀, sudo will only be used when strictly necessary.\n" "${RED}" "${RESTORE}"
+  printf "%b[-]%b Please don't run this script as root 💀, sudo will only be used to install stuff when strictly necessary.\n" "${RED}" "${RESTORE}"
   exit 1
 fi
 
@@ -34,8 +34,9 @@ if [ -n "$compatible_distro" ]; then
     # Homebrew (for rustscan)
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     
-    # Bind to shell
-    (echo; echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv )"') >> "${HOME}"/.zprofile
+    # Bind brew to shell
+    if [ "$SHELL" = /usr/bin/zsh ]; then profile="zprofile"; else profile="profile"; fi
+    (echo; echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv )"') >> "${HOME}"/."$profile"
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
     
     # Install Rustscan

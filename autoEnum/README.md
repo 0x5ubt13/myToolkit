@@ -8,7 +8,9 @@ Pass either a single IP address or a targets file to it and will first get the p
 
 Due to some new functionality that is not present in `autoNmap`, `autoEnum` is written in a non-POSIX compliant manner (at least for now). Make sure you have `bash` (or `zsh`) installed, then simply run the script.
 
-This tool is still in its early days, and I'm working on it alone and as fast as I can on my free time. Please consider collaborating with me!
+This tool is still in its early days, and comes with absolutely no guarantee. Please email `5ubt13@protonmail.com` with any suggestions you may have.
+
+![autoEnum_gif](autoenum-demo.gif)
 
 ## Usage
 
@@ -42,9 +44,10 @@ Examples:
 	autoenum -t targets_file.txt -r 10.10.8.0/24 
 ~~~
 
-## Wrapped tools currently present
+## 24 wrapped tools currently present
 
 - Braa
+- CeWL
 - CrackMapExec
 - Enum4linux
 - Ffuf
@@ -68,7 +71,7 @@ Examples:
 - WhatWeb
 - WafW00f
 
-And many more doing the magic tricks!!
+And many more doing magic tricks behind the scenes!!
 
 ## Tools yet to implement
 

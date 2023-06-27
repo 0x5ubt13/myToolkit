@@ -281,6 +281,8 @@ ports_iterator() {
   darkweb_top1000=$(locate "darkweb2017-top1000.txt" -l 1) && \
     printf "%b[+] Found passwords wordlist for password sprayers.\n\tUsing '%b%s%b'%b\n\n" "${GREEN}" "${YELLOW}" "${darkweb_top1000}" "${GREEN}" "${RESTORE}" 
   else
+    # subs_top5000=$(locate "subdomains-top1million-5000.txt" -l 1)
+    extensions_list=$(locate raft-large-extensions-lowercase.txt -l 1)
     dir_list_medium=$(locate "directory-list-2.3-medium.txt" -l 1)
     darkweb_top1000=$(locate "darkweb2017-top1000.txt" -l 1)
   fi
@@ -345,15 +347,26 @@ ports_iterator() {
 
         running_tool "WhatWeb on port 80"
         whatweb -a 3 -v http://"${1}":80 >> "${http_dir}whatweb_80.out" 2>&1 && \
-          finished_tool "WhatWeb on port 80" "${1}" "${http_dir}whatweb_80.out" &
+          finished_tool "WhatWeb on port 80" "${1}" "${http_dir}whatweb_80.out" 
         
         # ffuf killswitch activated after 5 mins of running to save energy and avoid dangling processes consuming CPU
-        if [ -n "$dir_list_medium" ]; then
-          running_tool "ffuf on port 80"
-          ffuf -u http://"${1}":"${port}"/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 >> "${http_dir}ffuf_80.out" 2>&1 && \
+        if [ -n "$dir_list_medium" ] && [ -n "$extensions_list" ]; then
+          running_tool "CeWL+ffuf for keyword files on port 80"
+          cewl -m5 --lowercase -w "${http_dir}cewl_keywordslist.txt" http://"${1}" > "${http_dir}cewl.out" && \
+            ffuf -w "$dir_list_medium:FOLDERS,${http_dir}cewl_keywordslist.txt:KEYWORDS,${extensions_list}:EXTENSIONS" -u "http://${1}/FOLDERS/KEYWORDSEXTENSIONS" >> "${http_dir}ffuf_keywords_80.out" && \
             finished_tool "ffuf" "${1}" "${http_dir}ffuf_80.out" &
+
+          running_tool "ffuf for directory busting on port 80"
+          ffuf -u http://"${1}":80/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 >> "${http_dir}ffuf_80.out" 2>&1 && \
+            finished_tool "ffuf" "${1}" "${http_dir}ffuf_80.out" &
+        # TODO: create a flag to get the hostname for automatic vhost enumeration
+        # elif [ -n "$subs_top5000" ]; then
+        #   running_tool "ffuf for vhost enumeration on port 80"
+        #   content_length=$(curl -s -I http://${1} -H "HOST: geeztheconttlen.${hostname}" | grep "Content-Length: " | awk '{ print $2 }')
+        #   ffuf -u http://"${1}" -w "$subs_top5000" -H "HOST: FUZZ.${hostname}" -t 20 -fs $content_length -maxtime 300 -maxtime-job 300 >> "${http_dir}ffuf_subdomains_80.out" 2>&1 && \
+        #     finished_tool "ffuf for vhost enumeration on port 80" "${1}" "${http_dir}ffuf_subdomains_80.out" &
         else
-          printf "%b[-] Error: %bmedium directory wordlist not found. Aborting web fuzzing on port 80." "${RED}" "${RESTORE}"
+          printf "%b[-] Error: %bwordlists for ffuf not found. Aborting web fuzzing on port 80." "${RED}" "${RESTORE}"
         fi
         wp_enumeration "${1}" "80" "${http_dir}"
       elif [ "$port" -eq 443 ]; then
@@ -377,6 +390,11 @@ ports_iterator() {
           running_tool "ffuf on port 443"
           ffuf -u https://"${1}":443/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 >> "${http_dir}"ffuf_443.out 2>&1 && \
             finished_tool "ffuf on port 443" "${1}" "${http_dir}ffuf_443.out" &
+
+          running_tool "CeWL+ffuf for keyword files on port 443"
+          cewl -m5 --lowercase -w "${http_dir}cewl_keywordslist.txt" https://"${1}" > "${http_dir}cewl.out" && \
+            ffuf -w "$dir_list_medium:FOLDERS,${http_dir}cewl_keywordslist.txt:KEYWORDS,${extensions_list}:EXTENSIONS" -u "https://${1}/FOLDERS/KEYWORDSEXTENSIONS" >> "${http_dir}ffuf_keywords_443.out" && \
+            finished_tool "ffuf" "${1}" "${http_dir}ffuf_443.out" &
         else
           printf "%b[-] Error: %bmedium directory wordlist not found. Aborting web fuzzing on port 443." "${RED}" "${RESTORE}"
         fi
@@ -734,20 +752,26 @@ main() {
 # Check 0: Launch fancy (Bruce) Banner! 
 if [ "$verbose" -eq 1 ]; then print_hulk; print_phase 0; fi # Ba-dum-tss!
 
+
 # Check 1: help flag passed?
 if [ -n "$do_help" ]; then
-  if [ "$verbose" -eq 1 ]; then printf "%b[*] Help flag detected. Aborting other cheks and printing usage.\n%b" "${BLUE}" "${RESTORE}"; fi
+  if [ "$verbose" -eq 1 ]; then printf "%b[*] Help flag detected. Aborting other checks and printing usage.\n%b" "${BLUE}" "${RESTORE}"; fi
   usage
 fi
 
-# Check 2: Ensure there is a target
+# Check 1: am I groot?!
+if [ "$EUID" -ne 0 ]; then
+  error_msg "Please run me as root!"
+fi
+
+# Check 3: Ensure there is a target
 if [[ -n "$ip" ]]; then
   IP="$ip"
 else
   error_msg "You must provide an IP address or targets file with the flag -t to start the attack."
 fi
 
-# Check 3: Determine whether it is a single target or multi-target
+# Check 4: Determine whether it is a single target or multi-target
 if [[ ! -f "$IP" ]]; then # Single target
   # Ensure $IP is either an IP or a URL
   if ! expr "${IP}" : "\([0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\)" >/dev/null && \
@@ -759,7 +783,7 @@ else
   list_total_lines=$(wc -l "$IP" | awk '{ print $1 }')
 fi
 
-# Check 4: Ensure base output directory is correctly set and exists
+# Check 5: Ensure base output directory is correctly set and exists
 ## TODO: create option to set custom directory if launched autonomously outside Docker
 if test "$(pwd)" = "/"; then
   DIR="/autoEnum_output/"
@@ -769,7 +793,7 @@ fi
 
 custom_mkdir "${DIR}"
 
-# Check 5: locate exists in the system
+# Check 6: locate exists in the system
 updatedb_check=$(which updatedb)
 # TODO: Remove this requisite for the containerised version of the script
 if [ -z "$updatedb_check" ]; then
