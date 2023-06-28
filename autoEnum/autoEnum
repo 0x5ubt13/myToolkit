@@ -78,6 +78,30 @@ answers_icmp() {
   fi
 }
 
+get_wordlists() {
+  # Find wordlists instead of hardcoding them
+  dir_list_medium=$(locate "directory-list-2.3-medium.txt" -l 1)
+  darkweb_top1000=$(locate "darkweb2017-top1000.txt" -l 1)
+  extensions_list=$(locate "raft-large-extensions-lowercase.txt" -l 1)
+  # subs_top5000=$(locate "subdomains-top1million-20000.txt" -l 1
+
+  if [ -n "$dir_list_medium" ]; then
+    if [ "$verbose" -eq 1 ]; then printf "%b[+] Found directory wordlist for web fuzzers.\n\tUsing '%b%s%b'%b\n" "${GREEN}" "${YELLOW}" "${dir_list_medium}" "${GREEN}" "${RESTORE}"; fi
+  else
+    error_msg "Directory wordlist not found"
+  fi
+  if [ -n "$darkweb_top1000" ]; then
+    if [ "$verbose" -eq 1 ]; then printf "%b[+] Found passwords wordlist for password sprayers.\n\tUsing '%b%s%b'%b\n" "${GREEN}" "${YELLOW}" "${darkweb_top1000}" "${GREEN}" "${RESTORE}"; fi
+  else
+    error_msg "Password wordlist not found"
+  fi
+  if [ -n "$extensions_list" ]; then
+    if [ "$verbose" -eq 1 ]; then printf "%b[+] Found extensions wordlist for file extension sprayers.\n\tUsing '%b%s%b'%b\n" "${GREEN}" "${YELLOW}" "${darkweb_top1000}" "${GREEN}" "${RESTORE}"; fi
+  else
+    error_msg "Extension wordlist not found"
+  fi
+}
+
 running_tool() {
   if [ "$verbose" -eq 1 ]; then
     printf "%b[!] Starting %b%s%b and sending it to the background.%b\n" "${YELLOW}" "${BLUE}" "${1}" "${YELLOW}" "${RESTORE}"
@@ -273,19 +297,7 @@ ports_iterator() {
   
   # Convert comma-separated string to an array of ports
   IFS=',' read -ra PORTS_ARRAY <<< "$ports" ## TODO: convert Here-Strings to POSIX
-  
-  # Only look once for the wordlists
-  if [ "$verbose" -eq 1 ]; then
-  dir_list_medium=$(locate "directory-list-2.3-medium.txt" -l 1) && \
-    printf "%b[+] Found directory wordlist for web fuzzers.\n\tUsing '%b%s%b'%b\n" "${GREEN}" "${YELLOW}" "${dir_list_medium}" "${GREEN}" "${RESTORE}"
-  darkweb_top1000=$(locate "darkweb2017-top1000.txt" -l 1) && \
-    printf "%b[+] Found passwords wordlist for password sprayers.\n\tUsing '%b%s%b'%b\n\n" "${GREEN}" "${YELLOW}" "${darkweb_top1000}" "${GREEN}" "${RESTORE}" 
-  else
-    # subs_top5000=$(locate "subdomains-top1million-5000.txt" -l 1)
-    extensions_list=$(locate raft-large-extensions-lowercase.txt -l 1)
-    dir_list_medium=$(locate "directory-list-2.3-medium.txt" -l 1)
-    darkweb_top1000=$(locate "darkweb2017-top1000.txt" -l 1)
-  fi
+
   # Iterate over each port in the array
   for port in "${PORTS_ARRAY[@]}"; do ## TODO: convert array to POSIX
     # Use a case statement to perform different actions for each port
@@ -332,8 +344,11 @@ ports_iterator() {
         finished_tool "Nmap scripts for DNS" "${1}" "${dns_dir}dns_nmap_scan.out" &
       ;;
     80|443|8080)
+      # Create dir for HTTP and get wordlists
+      http_dir="${dir}http/"; custom_mkdir "$http_dir"
+      get_wordlists
+      
       # Common Web without TLS
-      http_dir="${dir}http/"; custom_mkdir "$http_dir" 
       if [ "$port" -eq 80 ]; then
         printf "%b[+] Running Web enum tools in port 80%b\n" "${GREEN}" "${RESTORE}"
         
@@ -359,14 +374,22 @@ ports_iterator() {
           running_tool "ffuf for directory busting on port 80"
           ffuf -u http://"${1}":80/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 >> "${http_dir}ffuf_80.out" 2>&1 && \
             finished_tool "ffuf" "${1}" "${http_dir}ffuf_80.out" &
-        # TODO: create a flag to get the hostname for automatic vhost enumeration
+        
+        # TODO: create a flag to get the hostname for automatic subdomain and vhost enumeration
         # elif [ -n "$subs_top5000" ]; then
+        #   running_tool "Sublist3r passive mode"
+        #   sublist3r -d "${1}"
+        #   
+        #   running_tool "ffuf for subdomain bruteforcing on port 80"
+        #   ffuf -u "http://FUZZ.${1}" -w "$subs_top5000" -t 20 -v -maxtime 300 -maxtime-job 300 >> "${http_dir}ffuf_subdomains_80.out" 2>&1 && \
+        #     finished_tool "ffuf for subdomain bruteforcing on port 80" "${1}" "${http_dir}ffuf_80.out" &
+        #     
         #   running_tool "ffuf for vhost enumeration on port 80"
         #   content_length=$(curl -s -I http://${1} -H "HOST: geeztheconttlen.${hostname}" | grep "Content-Length: " | awk '{ print $2 }')
-        #   ffuf -u http://"${1}" -w "$subs_top5000" -H "HOST: FUZZ.${hostname}" -t 20 -fs $content_length -maxtime 300 -maxtime-job 300 >> "${http_dir}ffuf_subdomains_80.out" 2>&1 && \
-        #     finished_tool "ffuf for vhost enumeration on port 80" "${1}" "${http_dir}ffuf_subdomains_80.out" &
+        #   ffuf -u http://"${1}" -w "$subs_top5000" -H "HOST: FUZZ.${hostname}" -t 20 -fs $content_length -maxtime 300 -maxtime-job 300 >> "${http_dir}ffuf_vhosts_80.out" 2>&1 && \
+        #     finished_tool "ffuf for vhost enumeration on port 80" "${1}" "${http_dir}ffuf_vhosts_80.out" &
         else
-          printf "%b[-] Error: %bwordlists for ffuf not found. Aborting web fuzzing on port 80." "${RED}" "${RESTORE}"
+          printf "%b[-] Error: %bwordlists for ffuf not found. Aborting web fuzzing on port 80.\n" "${RED}" "${RESTORE}"
         fi
         wp_enumeration "${1}" "80" "${http_dir}"
       elif [ "$port" -eq 443 ]; then
