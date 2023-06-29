@@ -366,17 +366,17 @@ ports_iterator() {
 
         running_tool "WhatWeb on port 80"
         whatweb -a 3 -v http://"${1}":80 >> "${http_dir}whatweb_80.out" 2>&1 && \
-          finished_tool "WhatWeb on port 80" "${1}" "${http_dir}whatweb_80.out" 
+          finished_tool "WhatWeb on port 80" "${1}" "${http_dir}whatweb_80.out" &
         
         # ffuf killswitch activated after 5 mins of running to save energy and avoid dangling processes consuming CPU
         if [ "$wordlists_check_out" -eq 1 ]; then
           running_tool "CeWL+ffuf for keyword files on port 80"
           cewl -m5 --lowercase -w "${http_dir}cewl_keywordslist.txt" http://"${1}" > "${http_dir}cewl.out" && \
-            ffuf -w "$dir_list_medium:FOLDERS,${http_dir}cewl_keywordslist.txt:KEYWORDS,${extensions_list}:EXTENSIONS" -u "http://${1}/FOLDERS/KEYWORDSEXTENSIONS" -v -maxtime 300 -maxtime-job 300 >> "${http_dir}ffuf_keywords_80.out" 2>&1 && \
-            finished_tool "ffuf" "${1}" "${http_dir}ffuf_80.out" &
+            ffuf -w "$dir_list_medium:FOLDERS,${http_dir}cewl_keywordslist.txt:KEYWORDS,${extensions_list}:EXTENSIONS" -u "http://${1}/FOLDERS/KEYWORDSEXTENSIONS" -v -maxtime 300 -maxtime-job 300 1>"${http_dir}ffuf_keywords_80.out" 2>/dev/null && \
+            finished_tool "ffuf" "${1}" "${http_dir}ffuf_keywords_80.out" &
 
           running_tool "ffuf for directory busting on port 80"
-          ffuf -u http://"${1}":80/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 >> "${http_dir}ffuf_80.out" 2>&1 && \
+          ffuf -u http://"${1}":80/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 1>"${http_dir}ffuf_80.out" 2>/dev/null && \
             finished_tool "ffuf" "${1}" "${http_dir}ffuf_80.out" &
         
         # TODO: create a flag to get the hostname for automatic subdomain and vhost enumeration
@@ -479,6 +479,20 @@ ports_iterator() {
         nmap -n -Pn -sVC -p 111 -sU "${1}" >> "${rpc_dir}rpc_udp_enum.nmap" 2>&1 && \
           finished_tool "Nmap for RPC on UDP" "${1}" "${rpc_dir}rpc_udp_enum.nmap" &
       fi
+      ;;
+    135)
+      if [ ! -d "${dir}msrpc/" ]; then
+        printf "%b[+] MSRPC detected. Running MSRPC enum tools.%b\n" "${GREEN}" "${RESTORE}"
+        msrpc_dir="${dir}msrpc/"; custom_mkdir "$msrpc_dir"
+
+        running_tool "Nmap for MSRPC"
+        nmap -n -Pn -sVC -p 135 --script=msrpc-enum "${1}" >> "${msrpc_dir}msrpc_enum.nmap" 2>&1 && \
+          finished_tool "Nmap for RPC on UDP" "${1}" "${msrpc_dir}msrpc_enum.nmap" &
+        
+        running_tool "RPCDump for MSRPC"
+        rpcdump -p 135 "${1}" >> "${msrpc_dir}rpcdump.out" 2>&1 && \
+          finished_tool "RPCDump for MSRPC" "${1}" "${msrpc_dir}rpcdump.out" &
+      fi 
       ;;
     137|138|139|445)
       # Run only once

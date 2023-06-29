@@ -44,7 +44,7 @@ Examples:
 	autoenum -t targets_file.txt -r 10.10.8.0/24 
 ~~~
 
-## 24 wrapped tools currently present
+## 25 wrapped tools currently present
 
 - Braa
 - CeWL
@@ -62,6 +62,7 @@ Examples:
 - ODAT
 - Onesixtyone
 - Responder-RunFinger
+- RPCDump
 - Rustscan
 - SMBMap
 - SNMPWalk
@@ -104,6 +105,7 @@ cd mytoolkit/autoEnum/
 - [x] Hide many of the notifications behind an optional verbose flag
 - [ ] Finish the core script
 - [ ] Test thoroughly
+- [ ] Link each wrapped tool on README to their repos
 - [ ] Containerise
 - [ ] Improve the way output is presented to terminal
 - [ ] Convert to POSIX compliant
