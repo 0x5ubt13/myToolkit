@@ -44,7 +44,7 @@ Examples:
 	autoenum -t targets_file.txt -r 10.10.8.0/24 
 ~~~
 
-## 25 wrapped tools currently present
+## 26 wrapped tools currently present
 
 - Braa
 - CeWL
@@ -53,6 +53,7 @@ Examples:
 - Ffuf
 - Gobuster
 - Hydra
+- Ident-user-enum
 - Metasploit
 - Nbtscan-unixwiz
 - Nikto

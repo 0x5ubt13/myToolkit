@@ -239,7 +239,10 @@ ports_sweep() {
       printf "%b[+] Done! Found open ports on target.\n\tOpen ports in %b'%s'%b: %b%s\n%b[+] Saved as '%b%sopen_ports.txt%b' in nmap-friendly format.%b\n" "${GREEN}" "${RESTORE}" "${1}" "${GREEN}" "${RESTORE}" "${ports}" "${GREEN}" "${RESTORE}" "${2}" "${GREEN}" "${RESTORE}"
     fi
   fi
-}
+
+  # Save ports output in different formats as needed for other tools, i.e. nmap needs comma-separated, ident-user-enum needs space-separated, etc 
+  ports_spaced=$(sed 's/,/ /g' "${2}"open_ports.txt); echo "$ports_spaced" > "${2}"open_ports_spaced.txt 
+ }
 
 # Proceed with an aggressive scan
 aggressive_scan() {
@@ -478,6 +481,20 @@ ports_iterator() {
         running_tool "Nmap for RPC on UDP"
         nmap -n -Pn -sVC -p 111 -sU "${1}" >> "${rpc_dir}rpc_udp_enum.nmap" 2>&1 && \
           finished_tool "Nmap for RPC on UDP" "${1}" "${rpc_dir}rpc_udp_enum.nmap" &
+      fi
+      ;;
+    113)
+      if [ ! -d "${dir}"ident/ ]; then
+        printf "%b[+] RPC service detected. Running RPC nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
+        ident_dir="${dir}ident/"; custom_mkdir "$ident_dir"
+        
+        running_tool "Nmap for Ident"
+        nmap -n -Pn -sVC -p 113 "${1}" >> "${ident_dir}ident-enum.nmap" 2>&1 && \
+          finished_tool "Nmap for Ident" "${1}" "${ident_dir}ident-enum.nmap" &
+
+        running_tool "Ident-user-enum"
+        ident-user-enum "${1}" "$ports_spaced" >> "${ident_dir}ident-user-enum.out" 2>&1 && \
+          finished_tool "Ident-user-enum" "${1}" "${ident_dir}ident-user-enum.out" &
       fi
       ;;
     135)

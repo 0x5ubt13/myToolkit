@@ -13,20 +13,22 @@ if [ "$EUID" -eq 0 ]; then
   exit 1
 fi
 
+install() {
+  # First arg is tool name
+  tool_check=$(which "${1}")
+  if [ -z "$tool_check" ]; then
+    printf "%b[+] Installing %s...%b\n" "${GREEN}" "${1}" "${RESTORE}"
+    sudo apt install "${1}" -y >/dev/null
+  else
+    printf "%b[+] %s detected as installed.%b\n" "${GREEN}" "${1}" "${RESTORE}"
+  fi
+}
+
 # Detecting debian-based distro
 compatible_distro=$(cat /etc/*-release | grep -i "debian")
 if [ -n "$compatible_distro" ]; then
-  printf "%b[+] Debian-like distro successfully detected. Updating system...%b\n" "${GREEN}" "${RESTORE}"
+  printf "%b[+] Debian-like distro successfully detected. Updating apt-get's cache...%b\n" "${GREEN}" "${RESTORE}"
   sudo apt-get update >/dev/null  
-  
-  # Seclists
-  seclists=$(find /usr/share/ 2>/dev/null | grep darkweb2017-top1000.txt)
-  if [ -n "$seclists" ]; then
-    printf "%b[+] Seclists detected as installed.%b\n" "${GREEN}" "${RESTORE}"
-  else
-    printf "%b[+] Installing seclists...%b\n" "${GREEN}" "${RESTORE}"
-    sudo apt-get install seclists
-  fi
 
   # Rustscan
   rustscan_check=$(find / rustscan 2>/dev/null | grep /bin/rustscan)
@@ -35,49 +37,33 @@ if [ -n "$compatible_distro" ]; then
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     
     # Bind brew to shell
-    if [ "$SHELL" = /usr/bin/zsh ]; then profile="zprofile"; else profile="profile"; fi
-    (echo; echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv )"') >> "${HOME}"/."$profile"
-        eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-    
-    # Install Rustscan
-    brew install rustscan
+    if [ "$SHELL" = /usr/bin/zsh ]; then rc="${HOME}/.zshrc"; else rc="${HOME}/.bashrc"; fi
+    printf "\neval \"\$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)\"" >> "$rc"
+
+    # Install Rustscan with brew
+    printf "%b[+] Installing %s...%b\n" "${GREEN}" "Rustscan" "${RESTORE}"
+    /home/linuxbrew/.linuxbrew/bin/brew install rustscan >/dev/null
   else
     printf "%b[+] Rustscan detected as installed.%b\n" "${GREEN}" "${RESTORE}"
   fi
 
-  # Updatedb / locate
-  updatedb_check=$(which updatedb)
-  if [ -z "$updatedb_check" ]; then
-    sudo apt install updatedb locate -y
-  fi
-  sudo updatedb
-  
+  # Using apt-get for the following tools
+  install updatedb
+  install locate
+  install odat
+  install "ssh-audit"
+  install "ident-user-enum"
+  install seclists
+  install cewl
+  install wafW00f
+
   # Symlink autoEnum
   chmod +x ./autoEnum
   ln -s ./autoEnum /usr/bin/autoenum
 
-  # ODAT
-  updatedb_check=$(which updatedb)
-  if [ -z "$updatedb_check" ]; then
-    printf "%b[+] Installing ODAT...%b\n" "${GREEN}" "${RESTORE}"
-    sudo apt install odat -y >/dev/null
-  else
-    printf "%b[+] ODAT detected as installed.%b\n" "${GREEN}" "${RESTORE}"
-  fi
-  
-  # SSH-Audit
-  ssh_audit_check=$(which ssh-audit)
-  if [ -z "$ssh_audit_check" ]; then
-    printf "%b[+] Installing ssh-audit...%b\n" "${GREEN}" "${RESTORE}"
-    sudo apt install ssh-audit -y >/dev/null
-  else
-    printf "%b[+] SSH-Audit detected as installed.%b\n" "${GREEN}" "${RESTORE}"
-  fi
-
   # Launch autoEnum help
   printf "%b[+]%b autoEnum %bis ready for you! Start enumerating now! :)\n" "${GREEN}" "${YELLOW}" "${RESTORE}"
   autoenum -h
-
 else
   printf "%b[-] Debian-like distro NOT detected. Aborting...%b\n%b[!] To run autoEnum fast, simply make sure you have installed Seclists and Rustscan. Some ports won't be covered, like 1521, but the majority will be enumerated!%b\n" "${RED}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
 fi    
