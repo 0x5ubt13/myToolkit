@@ -249,14 +249,14 @@ aggressive_scan() {
   # First arg IP, second arg directory
   if [ "$verbose" -eq 1 ]; then 
     printf "%b[!] Starting %bmain aggressive vuln nmap scan%b against %b'%s'%b and sending it to the background.\n%b" "${YELLOW}" "${BLUE}" "${YELLOW}" "${RESTORE}" "${1}" "${YELLOW}" "${RESTORE}"
-    printf "%b[!] Running '%bnmap -A -v %s --script=vuln -oA %snmap_scan -p%s %s --stats-every 15s &%b'.\n\tShortcut: '%btail -f %snmap_tailable_progress.out%b'%b\n" "${YELLOW}" "${RESTORE}" "${ping}" "${2}" "${ports}" "${1}" "${YELLOW}" "${RESTORE}" "${2}" "${YELLOW}" "${RESTORE}"
+    printf "%b[!] Running '%bnmap -sVC -O -v %s --script=vuln -oA %svuln_scan_all_ports -p%s %s --stats-every 15s &%b'.\n\tShortcut: '%btail -f %snmap_tailable_status.out%b'%b\n" "${YELLOW}" "${RESTORE}" "${ping}" "${2}" "${ports}" "${1}" "${YELLOW}" "${RESTORE}" "${2}" "${YELLOW}" "${RESTORE}"
   fi
-  printf "%b[+] Saving output to %b%snmap_scan.out %bin all formats.%b\n\n" "${GREEN}" "${RESTORE}" "${2}" "${GREEN}" "${RESTORE}"
+  printf "%b[+] Saving output to %b%svuln_scan_all_ports %bin all formats.%b\n\n" "${GREEN}" "${RESTORE}" "${2}" "${GREEN}" "${RESTORE}"
   
-  nmap "${1}" -A -v "$ping" --script=vuln -oA "${2}general_scan" -p"$ports" >> "${2}"nmap_tailable_progress.out 2>&1 && \
-    xsltproc "${2}general_scan.xml" -o "${2}nmap_scan.html" && \
-    finished_tool "Main aggressive nmap scan" "${1}" "${2}general_scan.nmap" && \
-    printf "%b[+] Successfully generated HTML report of the Nmap scan, available at '%b%s%b'.%b\n" "${GREEN}" "${RESTORE}" "${2}general_scan.html" "${GREEN}" "${RESTORE}" &
+  nmap "${1}" -sVC -O -v "$ping" --script=vuln -oA "${2}vuln_scan_all_ports" -p"$ports" --stats-every 15s >> "${2}"nmap_tailable_status.out 2>&1 && \
+    xsltproc "${2}vuln_scan_all_ports.xml" -o "${2}vuln_scan_all_ports.html" && \
+    finished_tool "Main aggressive nmap scan" "${1}" "${2}vuln_scan_all_ports.nmap" && \
+    printf "%b[+] Successfully generated HTML report of the Nmap scan, available at '%b%s%b'.%b\n" "${GREEN}" "${RESTORE}" "${2}vuln_scan_all_ports.html" "${GREEN}" "${RESTORE}" &
 }
 
 wp_enumeration() {
@@ -328,7 +328,7 @@ ports_iterator() {
 
       running_tool "SSH-Audit"
       ssh-audit "${1}" >> "${ssh_dir}ssh_audit.out" 2>&1 && \
-        finished_tool "SSH-Audit" "${1}" "${ssh_dir}ssh_enum.nmap" &
+        finished_tool "SSH-Audit" "${1}" "${ssh_dir}ssh_audit.out" &
       # TODO: add hydra and try to force a list of low-hanging fruit user+pass
       ;;
     25|465|587) 
