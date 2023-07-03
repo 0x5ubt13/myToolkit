@@ -17,10 +17,12 @@ do_help=""
 verbose=1
 slower=0
 again=0
+bruteforce=0
 
-while getopts "ad:hp:qr:st:" flag; do
+while getopts "abd:hp:qr:st:" flag; do
   case "${flag}" in
     a) again=1;;
+    b) bruteforce=1;;
     d) dnsServers="--dns-servers ${OPTARG}";;
     t) ip="${OPTARG}";;
     h) do_help="yes";;
@@ -39,14 +41,15 @@ shift $((OPTIND-1))
 # Print usage and exit
 usage() {
   printf "\n%bUsage: %b%s [OPTIONS] -t <Single target's IP/Targets file>\n" "${GREEN}" "${RESTORE}" "$(basename "$0")"
-  printf "%b\t-a:%b Again     - Repeat the scan and compare with initial ports discovered.\n" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-d:%b DNS       - Specify custom DNS servers. Default option: %b-n%b.\n" "${YELLOW}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-h:%b Help      - Display this help and exit.\n" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-p:%b top Ports - Run port sweep with nmap and the flag %b--top-ports=%b<your input>\n" "${YELLOW}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-q:%b Quiet     - Don't print the cool banner and decrease overall verbosity.\n" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-r:%b Range     - Specify a CIDR range to use tools for whole subnets.\n" "${YELLOW}" "${RESTORE}" 
-  printf "%b\t-s:%b Slower    - Don't use Rustscan for the initial port sweep.\n" "${YELLOW}" "${RESTORE}"
-  printf "%b\t-t:%b Target    - Specify target single IP / List of IPs file.\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-a:%b Again      - Repeat the scan and compare with initial ports discovered.\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-b:%b Bruteforce - Activate all fuzzing and bruteforcing in the script.\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-d:%b DNS        - Specify custom DNS servers. Default option: %b-n%b.\n" "${YELLOW}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-h:%b Help       - Display this help and exit.\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-p:%b top Ports  - Run port sweep with nmap and the flag %b--top-ports=%b<your input>\n" "${YELLOW}" "${RESTORE}" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-q:%b Quiet      - Don't print the cool banner and decrease overall verbosity.\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-r:%b Range      - Specify a CIDR range to use tools for whole subnets.\n" "${YELLOW}" "${RESTORE}" 
+  printf "%b\t-s:%b Slower     - Don't use Rustscan for the initial port sweep.\n" "${YELLOW}" "${RESTORE}"
+  printf "%b\t-t:%b Target     - Specify target single IP / List of IPs file.\n" "${YELLOW}" "${RESTORE}"
   printf "%b\nExamples:\n\t%s %b-t%b 192.168.142.93\n\t%s %b-qa -t%b 192.168.142.93\n\t%s %b-t%b 10.129.121.60 %b-d%b <serv1[,serv2],...>\n\t%s %b-t%b 10.129.121.60 %b-r%b 10.129.121.0/24\n\t%s %b-t%b targets_file.txt %b-r%b 10.10.8.0/24%b" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "${YELLOW}" "${GREEN}" "$(basename "$0")" "${YELLOW}" "${GREEN}" "${YELLOW}" "${GREEN}" "${RESTORE}"
   exit 1
 }
@@ -245,7 +248,7 @@ ports_sweep() {
  }
 
 # Proceed with an aggressive scan
-aggressive_scan() {
+all_ports_vuln_scan() {
   # First arg IP, second arg directory
   if [ "$verbose" -eq 1 ]; then 
     printf "%b[!] Starting %bmain aggressive vuln nmap scan%b against %b'%s'%b and sending it to the background.\n%b" "${YELLOW}" "${BLUE}" "${YELLOW}" "${RESTORE}" "${1}" "${YELLOW}" "${RESTORE}"
@@ -267,6 +270,29 @@ wp_enumeration() {
     running_tool "WPScan"
     wpscan --url http://"${1}":"${2}" -e p,u >> "${3}"wpscan_port_"${2}".out 2>&1 && \
       finished_tool "WPScan" "${1}" "${3}wpscan.out" & 
+  fi
+}
+
+tomcat_enumeration() {
+  tomcat_version=$(curl -s -X GET http://"${IP}":8080/docs/ | grep -i 'Tomcat')
+  if [ -n "$tomcat_version" ]; then
+    if [ "$bruteforce" -eq 1 ]; then
+      printf "%b[+] Web service Tomcat detected. Running Tomcat bruteforcing/fuzzing tools%b\n" "${GREEN}" "${RESTORE}"
+      if [ -n "$dir_list_medium" ]; then
+        running_tool "gobuster"
+        gobuster -z -q dir -e -u "${1}":8080 -w "$dir_list_medium" >> "${http_dir}gobuster_tomcat.out" 2>&1 && \
+          finished_tool "gobuster on port 8080" "${1}" "${http_dir}gobuster_tomcat.out" &
+      else
+      printf "%b[-] Error: %bmedium directory wordlist not found. Aborting web fuzzing on port 8080." "${RED}" "${RESTORE}"
+      fi
+      if [ -n "$darkweb_top1000" ]; then
+        running_tool "hydra"
+        hydra -L users.txt -P "$darkweb_top1000" -f "${1}" http-get /manager/html >> "${http_dir}"hydra.out 2>&1 && \
+          finished_tool "Hydra" "${1}" "${http_dir}hydra.out" &
+      else
+      printf "%b[-] Error: %bdarkweb_top1000 wordlist not found. Aborting bruteforcing with hydra on port 8080." "${RED}" "${RESTORE}"
+      fi
+    fi
   fi
 }
 
@@ -304,6 +330,12 @@ ports_iterator() {
   
   # Convert comma-separated string to an array of ports
   IFS=',' read -ra PORTS_ARRAY <<< "$ports" ## TODO: convert Here-Strings to POSIX
+
+  # Notifying user of bruteforcing intentions and grabbing wordlists
+  if [ "$bruteforce" -eq 1 ] && [ "$verbose" -eq 1 ]; then
+    printf "%b[*] Bruteforce flag detected. Activating fuzzing and bruteforcing tools where applicable.\n%b" "${BLUE}" "${RESTORE}"
+    get_wordlists
+  fi
 
   # Iterate over each port in the array
   for port in "${PORTS_ARRAY[@]}"; do ## TODO: convert array to POSIX
@@ -353,7 +385,6 @@ ports_iterator() {
     80|443|8080)
       # Create dir for HTTP and get wordlists
       http_dir="${dir}http/"; custom_mkdir "$http_dir"
-      get_wordlists
       
       # Common Web without TLS
       if [ "$port" -eq 80 ]; then
@@ -372,31 +403,33 @@ ports_iterator() {
           finished_tool "WhatWeb on port 80" "${1}" "${http_dir}whatweb_80.out" &
         
         # ffuf killswitch activated after 5 mins of running to save energy and avoid dangling processes consuming CPU
-        if [ "$wordlists_check_out" -eq 1 ]; then
-          running_tool "CeWL+ffuf for keyword files on port 80"
-          cewl -m5 --lowercase -w "${http_dir}cewl_keywordslist.txt" http://"${1}" > "${http_dir}cewl.out" && \
-            ffuf -w "$dir_list_medium:FOLDERS,${http_dir}cewl_keywordslist.txt:KEYWORDS,${extensions_list}:EXTENSIONS" -u "http://${1}/FOLDERS/KEYWORDSEXTENSIONS" -v -maxtime 300 -maxtime-job 300 1>"${http_dir}ffuf_keywords_80.out" 2>/dev/null && \
-            finished_tool "ffuf" "${1}" "${http_dir}ffuf_keywords_80.out" &
-
-          running_tool "ffuf for directory busting on port 80"
-          ffuf -u http://"${1}":80/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 1>"${http_dir}ffuf_80.out" 2>/dev/null && \
-            finished_tool "ffuf" "${1}" "${http_dir}ffuf_80.out" &
-        
-        # TODO: create a flag to get the hostname for automatic subdomain and vhost enumeration
-        # elif [ -n "$subs_top5000" ]; then
-        #   running_tool "Sublist3r passive mode"
-        #   sublist3r -d "${1}"
-        #   
-        #   running_tool "ffuf for subdomain bruteforcing on port 80"
-        #   ffuf -u "http://FUZZ.${1}" -w "$subs_top5000" -t 20 -v -maxtime 300 -maxtime-job 300 >> "${http_dir}ffuf_subdomains_80.out" 2>&1 && \
-        #     finished_tool "ffuf for subdomain bruteforcing on port 80" "${1}" "${http_dir}ffuf_80.out" &
-        #     
-        #   running_tool "ffuf for vhost enumeration on port 80"
-        #   content_length=$(curl -s -I http://${1} -H "HOST: geeztheconttlen.${hostname}" | grep "Content-Length: " | awk '{ print $2 }')
-        #   ffuf -u http://"${1}" -w "$subs_top5000" -H "HOST: FUZZ.${hostname}" -t 20 -fs $content_length -maxtime 300 -maxtime-job 300 >> "${http_dir}ffuf_vhosts_80.out" 2>&1 && \
-        #     finished_tool "ffuf for vhost enumeration on port 80" "${1}" "${http_dir}ffuf_vhosts_80.out" &
-        else
-          printf "%b[-] Error: %bwordlists for ffuf not found. Aborting web fuzzing on port 80.\n" "${RED}" "${RESTORE}"
+        if [ "$bruteforce" -eq 1 ]; then
+          if [ "$wordlists_check_out" -eq 1 ]; then
+            running_tool "CeWL+ffuf for keyword files on port 80"
+            cewl -m5 --lowercase -w "${http_dir}cewl_keywordslist.txt" http://"${1}" > "${http_dir}cewl.out" && \
+              ffuf -w "$dir_list_medium:FOLDERS,${http_dir}cewl_keywordslist.txt:KEYWORDS,${extensions_list}:EXTENSIONS" -u "http://${1}/FOLDERS/KEYWORDSEXTENSIONS" -v -maxtime 300 -maxtime-job 300 1>"${http_dir}ffuf_keywords_80.out" 2>/dev/null && \
+              finished_tool "ffuf" "${1}" "${http_dir}ffuf_keywords_80.out" &
+  
+            running_tool "ffuf for directory busting on port 80"
+            ffuf -u http://"${1}":80/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 1>"${http_dir}ffuf_80.out" 2>/dev/null && \
+              finished_tool "ffuf" "${1}" "${http_dir}ffuf_80.out" &
+          
+          # TODO: create a flag to get the hostname for automatic subdomain and vhost enumeration
+          # elif [ -n "$subs_top5000" ]; then
+          #   running_tool "Sublist3r passive mode"
+          #   sublist3r -d "${1}"
+          #   
+          #   running_tool "ffuf for subdomain bruteforcing on port 80"
+          #   ffuf -u "http://FUZZ.${1}" -w "$subs_top5000" -t 20 -v -maxtime 300 -maxtime-job 300 >> "${http_dir}ffuf_subdomains_80.out" 2>&1 && \
+          #     finished_tool "ffuf for subdomain bruteforcing on port 80" "${1}" "${http_dir}ffuf_80.out" &
+          #     
+          #   running_tool "ffuf for vhost enumeration on port 80"
+          #   content_length=$(curl -s -I http://${1} -H "HOST: geeztheconttlen.${hostname}" | grep "Content-Length: " | awk '{ print $2 }')
+          #   ffuf -u http://"${1}" -w "$subs_top5000" -H "HOST: FUZZ.${hostname}" -t 20 -fs $content_length -maxtime 300 -maxtime-job 300 >> "${http_dir}ffuf_vhosts_80.out" 2>&1 && \
+          #     finished_tool "ffuf for vhost enumeration on port 80" "${1}" "${http_dir}ffuf_vhosts_80.out" &
+          else
+            printf "%b[-] Error: %bwordlists for ffuf not found. Aborting web fuzzing on port 80.\n" "${RED}" "${RESTORE}"
+          fi
         fi
         wp_enumeration "${1}" "80" "${http_dir}"
       elif [ "$port" -eq 443 ]; then
@@ -416,43 +449,26 @@ ports_iterator() {
           finished_tool "WhatWeb on port 443" "${1}" "${http_dir}whatweb_443.out" &
         
         # ffuf killswitch activated after 5 mins of running to save energy and avoid dangling processes consuming CPU
-        if [ -z "$dir_list_medium" ]; then
-          running_tool "ffuf on port 443"
-          ffuf -u https://"${1}":443/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 >> "${http_dir}"ffuf_443.out 2>&1 && \
-            finished_tool "ffuf on port 443" "${1}" "${http_dir}ffuf_443.out" &
-
-          running_tool "CeWL+ffuf for keyword files on port 443"
-          cewl -m5 --lowercase -w "${http_dir}cewl_keywordslist.txt" https://"${1}" > "${http_dir}cewl.out" && \
-            ffuf -w "$dir_list_medium:FOLDERS,${http_dir}cewl_keywordslist.txt:KEYWORDS,${extensions_list}:EXTENSIONS" -u "https://${1}/FOLDERS/KEYWORDSEXTENSIONS" >> "${http_dir}ffuf_keywords_443.out" && \
-            finished_tool "ffuf" "${1}" "${http_dir}ffuf_443.out" &
-        else
-          printf "%b[-] Error: %bmedium directory wordlist not found. Aborting web fuzzing on port 443." "${RED}" "${RESTORE}"
+        if [ "$bruteforce" -eq 1 ]; then
+          if [ -z "$dir_list_medium" ]; then
+            running_tool "ffuf on port 443"
+            ffuf -u https://"${1}":443/FUZZ -w "$dir_list_medium":FUZZ -recursion -recursion-depth 1 -e .php,.asp,.aspx -t 20 -v -maxtime 300 -maxtime-job 300 >> "${http_dir}"ffuf_443.out 2>&1 && \
+              finished_tool "ffuf on port 443" "${1}" "${http_dir}ffuf_443.out" &
+  
+            running_tool "CeWL+ffuf for keyword files on port 443"
+            cewl -m5 --lowercase -w "${http_dir}cewl_keywordslist.txt" https://"${1}" > "${http_dir}cewl.out" && \
+              ffuf -w "$dir_list_medium:FOLDERS,${http_dir}cewl_keywordslist.txt:KEYWORDS,${extensions_list}:EXTENSIONS" -u "https://${1}/FOLDERS/KEYWORDSEXTENSIONS" >> "${http_dir}ffuf_keywords_443.out" && \
+              finished_tool "ffuf" "${1}" "${http_dir}ffuf_443.out" &
+          else
+            printf "%b[-] Error: %bmedium directory wordlist not found. Aborting web fuzzing on port 443." "${RED}" "${RESTORE}"
+          fi
         fi
         wp_enumeration "${1}" "443" "${http_dir}"
       else
         # Try and enumerate port 8080
         printf "%b[+] Running Web enum tools in port 8080%b\n" "${GREEN}" "${RESTORE}"
         wp_enumeration "${1}" "8080" "${http_dir}" 
-        
-        tomcat_version=$(curl -s -X GET http://"${IP}":8080/docs/ | grep -i 'Tomcat')
-        if [ -n "$tomcat_version" ]; then
-          printf "%b[+] Web service Tomcat detected. Running Tomcat enum tools%b\n" "${GREEN}" "${RESTORE}"
-    
-          if [ -n "$dir_list_medium" ]; then
-            running_tool "gobuster"
-            gobuster -z -q dir -e -u "${1}":8080 -w "$dir_list_medium" >> "${http_dir}gobuster_tomcat.out" 2>&1 && \
-              finished_tool "gobuster on port 8080" "${1}" "${http_dir}gobuster_tomcat.out" &
-          else
-          printf "%b[-] Error: %bmedium directory wordlist not found. Aborting web fuzzing on port 8080." "${RED}" "${RESTORE}"
-          fi
-          if [ -n "$darkweb_top1000" ]; then
-            running_tool "hydra"
-            hydra -L users.txt -P "$darkweb_top1000" -f "${1}" http-get /manager/html >> "${http_dir}"hydra.out 2>&1 && \
-              finished_tool "Hydra" "${1}" "${http_dir}hydra.out" &
-          else
-          printf "%b[-] Error: %bdarkweb_top1000 wordlist not found. Aborting bruteforcing with hydra on port 8080." "${RED}" "${RESTORE}"
-          fi
-        fi
+        tomcat_enumeration "${1}"
       fi 
       ;;
     110|143|993|995)
@@ -757,7 +773,7 @@ main() {
 
     # If still alive, proceed with full nmap scan and ports iterator
     if [ "$verbose" -eq 1 ]; then print_phase 3; fi
-    aggressive_scan "${IP}" "${dir}"
+    all_ports_vuln_scan "${IP}" "${dir}"
 
     # Iterate over each port in the array
     ports_iterator "${IP}" "${dir}" ## TODO: convert ports_iterator to POSIX
@@ -792,7 +808,7 @@ main() {
         printf "%b[-] No open ports were found in %s, aborting all scans for this target\n%b" "${RED}" "${target}" "${RESTORE}"
       else
         # Proceed with nmap scan and ports iterator
-        aggressive_scan "$target"
+        all_ports_vuln_scan "$target"
 
         # Iterate over each port in the array
         ports_iterator "$target" ## TODO: convert ports_iterator to POSIX
@@ -810,14 +826,13 @@ main() {
 # Check 0: Launch fancy (Bruce) Banner! 
 if [ "$verbose" -eq 1 ]; then print_hulk; print_phase 0; fi # Ba-dum-tss!
 
-
 # Check 1: help flag passed?
 if [ -n "$do_help" ]; then
   if [ "$verbose" -eq 1 ]; then printf "%b[*] Help flag detected. Aborting other checks and printing usage.\n%b" "${BLUE}" "${RESTORE}"; fi
   usage
 fi
 
-# Check 1: am I groot?!
+# Check 2: am I groot?!
 if [ "$EUID" -ne 0 ]; then
   error_msg "Please run me as root!"
 fi
