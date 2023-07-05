@@ -82,30 +82,39 @@ answers_icmp() {
 }
 
 get_wordlists() {
-  # Find wordlists instead of hardcoding them
-  dir_list_medium=$(locate "directory-list-2.3-medium.txt" -l 1)
-  darkweb_top1000=$(locate "darkweb2017-top1000.txt" -l 1)
-  extensions_list=$(locate "raft-large-extensions-lowercase.txt" -l 1)
-  # subs_top5000=$(locate "subdomains-top1million-20000.txt" -l 1
-  wordlists_check_out=1
+  # Find wordlists instead of hardcoding them. Do not repeat if they are already loaded in memory.
+  if [ "$wordlists_check_out" -eq 0 ]; then
+    dir_list_medium=$(locate "raft-medium-directories-lowercase" -l 1)
+    darkweb_top1000=$(locate "darkweb2017-top1000.txt" -l 1)
+    extensions_list=$(locate "web-extensions.txt" -l 1)
+    users_list=$(locate "top-usernames-shortlist" -l 1)
+    # subs_top5000=$(locate "subdomains-top1million-20000.txt" -l 1
+    wordlists_check_out=1
 
-  if [ -n "$dir_list_medium" ]; then
-    if [ "$verbose" -eq 1 ]; then printf "%b[+] Found directory wordlist for web fuzzers.\n\tUsing '%b%s%b'%b\n" "${GREEN}" "${YELLOW}" "${dir_list_medium}" "${GREEN}" "${RESTORE}"; fi
-  else
-    wordlists_check_out=0
-    error_msg "Directory wordlist not found"
-  fi
-  if [ -n "$darkweb_top1000" ]; then
-    if [ "$verbose" -eq 1 ]; then printf "%b[+] Found passwords wordlist for password sprayers.\n\tUsing '%b%s%b'%b\n" "${GREEN}" "${YELLOW}" "${darkweb_top1000}" "${GREEN}" "${RESTORE}"; fi
-  else
-    wordlists_check_out=0
-    error_msg "Password wordlist not found"
-  fi
-  if [ -n "$extensions_list" ]; then
-    if [ "$verbose" -eq 1 ]; then printf "%b[+] Found extensions wordlist for file extension sprayers.\n\tUsing '%b%s%b'%b\n" "${GREEN}" "${YELLOW}" "${darkweb_top1000}" "${GREEN}" "${RESTORE}"; fi
-  else
-    wordlists_check_out=0
-    error_msg "Extension wordlist not found"
+    if [ -n "$dir_list_medium" ]; then
+      if [ "$verbose" -eq 1 ]; then printf "%b[+] Found directory wordlist for web fuzzers.\n\tUsing '%b%s%b'%b\n" "${GREEN}" "${YELLOW}" "${dir_list_medium}" "${GREEN}" "${RESTORE}"; fi
+    else
+      wordlists_check_out=0
+      error_msg "Directory wordlist not found"
+    fi
+    if [ -n "$extensions_list" ]; then
+      if [ "$verbose" -eq 1 ]; then printf "%b[+] Found extensions wordlist for file extension fuzzers.\n\tUsing '%b%s%b'%b\n" "${GREEN}" "${YELLOW}" "${darkweb_top1000}" "${GREEN}" "${RESTORE}"; fi
+    else
+      wordlists_check_out=0
+      error_msg "Extension wordlist not found"
+    fi
+    if [ -n "$users_list" ]; then
+      if [ "$verbose" -eq 1 ]; then printf "%b[+] Found usernames wordlist for username sprayers.\n\tUsing '%b%s%b'%b\n" "${GREEN}" "${YELLOW}" "${dir_list_medium}" "${GREEN}" "${RESTORE}"; fi
+    else
+      wordlists_check_out=0
+      error_msg "Directory wordlist not found"
+    fi
+    if [ -n "$darkweb_top1000" ]; then
+      if [ "$verbose" -eq 1 ]; then printf "%b[+] Found passwords wordlist for password sprayers.\n\tUsing '%b%s%b'%b\n" "${GREEN}" "${YELLOW}" "${darkweb_top1000}" "${GREEN}" "${RESTORE}"; fi
+    else
+      wordlists_check_out=0
+      error_msg "Password wordlist not found"
+    fi
   fi
 }
 
@@ -207,7 +216,7 @@ ports_sweep() {
   
   # Add and merge to ports an UDP scan.
   # TODO: only currently supporting the scan of SNMP and IPMI. More to add, dependant on how much time scanning UDP will consume
-  ports="${ports}","$(nmap --min-rate=2000 -sU -p161,162,10161,10162,623 -T5 --open "$ping" "$1" 2>/dev/null | grep "open " | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")"
+  ports="$ports","$(nmap --min-rate=2000 -sU -p161,162,10161,10162,623 -T5 --open "$ping" "$1" 2>/dev/null | grep "open " | grep "^[0-9]" | cut -d "/" -f 1 | tr "\n" "," | sed "s/,$//")"
 
   # Check whether there are ports in the var
   if [ -z "$ports" ]; then
@@ -215,12 +224,12 @@ ports_sweep() {
   else
     # Check if we are repeating the scan to discover more ports
     if [ "$again" -eq 1 ] && [ -f "${2}"open_ports.txt ]; then
-      if [ "$verbose" -eq 1 ]; then 
+      if [ "$verbose" -eq 1 ]; then
         printf "%b[+]%b -a%b flag and previous open ports file detected. Proceeding to compare open ports previouisly detected in %s against a new scan.\n%b" "${GREEN}" "${YELLOW}" "${GREEN}" "${2}open_ports.txt" "${RESTORE}"
       fi
       sweep_result=0
-      count1="$(wc -c "${2}"open_ports_repeat.txt | cut -d ' ' -f 1)"
       echo "$ports" > "${2}"open_ports_repeat.txt
+      count1="$(wc -c "${2}"open_ports_repeat.txt | cut -d ' ' -f 1)"
       # Compare
       if [[ -n $(diff -q "${2}"open_ports.txt "${2}"open_ports_repeat.txt) ]]; then
         echo "${2}"open_ports.txt >> "${2}"open_ports_repeat.txt
@@ -273,6 +282,15 @@ wp_enumeration() {
   fi
 }
 
+hydra_bruteforcing() {
+  # $1 target, $2 dir, $3 protocol
+  if [ "$bruteforce" -eq 1 ]; then
+    running_tool "Hydra"
+    hydra -L "$users_list" -P "$darkweb_top1000" "${3}://${1}" >> ${3}hydra.out && \
+      finished_tool "Hydra for ${3}" "${1}" "${2}"
+  fi
+}
+
 tomcat_enumeration() {
   tomcat_version=$(curl -s -X GET http://"${IP}":8080/docs/ | grep -i 'Tomcat')
   if [ -n "$tomcat_version" ]; then
@@ -307,6 +325,10 @@ cidr_enumeration() {
     # Run range tools
     if [ "$verbose" -eq 1 ]; then printf "%b[+]%b -r%b flag detected. Proceeding to scan CIDR range with dedicated range enumeration tools.\n%b" "${GREEN}" "${YELLOW}" "${GREEN}" "${RESTORE}"; fi
     
+    running_tool "netdiscover"
+    netdiscover -r "$cidr" >> "${cidr_dir}"netdiscover.out 2>&1 && \
+      finished_tool "netdiscover" "$cidr" "${cidr_dir}netdiscover.out" &
+
     running_tool "nbtscan-unixwiz" 
     nbtscan-unixwiz -f "$cidr" >> "${cidr_dir}"nbtscan-unixwiz.out 2>&1 && \
       finished_tool "nbtscan-unixwiz" "$cidr" "${cidr_dir}nbtscan-unixwiz.out" &
@@ -348,7 +370,8 @@ ports_iterator() {
       running_tool "Nmap scripts for FTP"
       nmap -sV -n -Pn -p21 "${1}" --script "ftp-* and not brute" -v >> "${ftp_dir}"ftp_enum.nmap 2>&1 && \
         finished_tool "Nmap scripts for FTP" "${1}" "${ftp_dir}ftp_enum.nmap" &
-      # TODO: add hydra and try to force a list of low-hanging fruit user+pass
+
+      hydra_bruteforcing "$1" "${ftp_dir}" "ftp"
       ;;
     22) 
       printf "%b[+] SSH service detected. Running SSH nmap enum scripts.%b\n" "${GREEN}" "${RESTORE}"
@@ -361,7 +384,10 @@ ports_iterator() {
       running_tool "SSH-Audit"
       ssh-audit "${1}" >> "${ssh_dir}ssh_audit.out" 2>&1 && \
         finished_tool "SSH-Audit" "${1}" "${ssh_dir}ssh_audit.out" &
-      # TODO: add hydra and try to force a list of low-hanging fruit user+pass
+      
+      # Adding hydra and try to force a list of low-hanging fruit user+pass
+      # $1 target, $2 dir, $3 protocol
+      hydra_bruteforcing "$1" "${ssh_dir}" "ssh"
       ;;
     25|465|587) 
       # Just run once for now.
@@ -406,7 +432,7 @@ ports_iterator() {
         if [ "$bruteforce" -eq 1 ]; then
           if [ "$wordlists_check_out" -eq 1 ]; then
             running_tool "CeWL+ffuf for keyword files on port 80"
-            cewl -m5 --lowercase -w "${http_dir}cewl_keywordslist.txt" http://"${1}" > "${http_dir}cewl.out" && \
+            cewl -m7 --lowercase -w "${http_dir}cewl_keywordslist.txt" http://"${1}" > "${http_dir}cewl.out" && \
               ffuf -w "$dir_list_medium:FOLDERS,${http_dir}cewl_keywordslist.txt:KEYWORDS,${extensions_list}:EXTENSIONS" -u "http://${1}/FOLDERS/KEYWORDSEXTENSIONS" -v -maxtime 300 -maxtime-job 300 1>"${http_dir}ffuf_keywords_80.out" 2>/dev/null && \
               finished_tool "ffuf" "${1}" "${http_dir}ffuf_keywords_80.out" &
   
@@ -483,10 +509,17 @@ ports_iterator() {
         running_tool "OpenSSL for IMAP"
         openssl s_client -connect "${1}":imaps > "${imap_pop3_dir}openssl_imap.out" 2>&1 && \
           finished_tool "OpenSSL for IMAP" "${1}" "${imap_pop3_dir}openssl_imap.out" &
-
-        # TODO: implement banner grabbing
-        # nc -nv "${1}" 110 > "${imap_pop3_dir}110_banner_grab.out" 2>&1 || \
-        #   finished_tool "OpenSSL for IMAP" "${1}" "${imap_pop3_dir}110_banner_grab.out" &  
+      fi
+      
+      # Banner grabbing
+      if [ "$port" -eq 110 ] || [ "$port" -eq 993 ]; then
+        running_tool "NC Banner grab for IMAP on port ${port}"
+        nc -nv "${1}" "$port" > "${imap_pop3_dir}banner_grab_${port}.out" 2>&1 && \
+          finished_tool "NC Banner grab for IMAP" "${1}" "${imap_pop3_dir}banner_grab.out" &
+      elif [ "$port" -eq 143 ] || [ "$port" -eq 995 ]; then
+        running_tool "NC Banner grab for POP3 on port ${port}"
+        nc -nv "${1}" "$port" > "${imap_pop3_dir}banner_grab_${port}.out" 2>&1 && \
+          finished_tool "NC Banner grab for POP3" "${1}" "${imap_pop3_dir}banner_grab.out" &
       fi
       ;;
     111)
@@ -534,9 +567,15 @@ ports_iterator() {
         nb_smb_dir="${dir}nb_smb/"; custom_mkdir "$nb_smb_dir"
         
         running_tool "CrackMapExec"
-        crackmapexec smb "${1}" --shares -u '' -p '' --shares --sessions --disks --loggedon-users --users --groups --computers --local-groups --pass-pol --rid-brute >> "${nb_smb_dir}"cme_anon.out 2>&1 && \
-          finished_tool "CrackMapExec" "${1}" "${nb_smb_dir}cme_anon.out" &
+        crackmapexec smb "${1}" -u '' -p '' --shares --sessions --disks --loggedon-users --users --groups --computers --local-groups --pass-pol --rid-brute >> "${nb_smb_dir}"cme_anon.out 2>&1 && \
+          finished_tool "CrackMapExec" "${1}" "-R ${nb_smb_dir}cme_anon.out" &
         
+        if [ "$bruteforce" -eq 1 ]; then
+        running_tool "CrackMapExec bruteforcing"
+        crackmapexec smb "${1}" -u "$users_list" -p "$darkweb_top1000" --shares --sessions --disks --loggedon-users --users --groups --computers --local-groups --pass-pol --rid-brute >> "${nb_smb_dir}"cme_brute.out 2>&1 && \
+          finished_tool "CrackMapExec bruteforcing" "${1}" "-R ${nb_smb_dir}cme_brute.out" &
+        fi
+
         running_tool "SMBMap"
         smbmap -H "${1}" >> "${nb_smb_dir}smbmap_anon.out" 2>&1 && \
           finished_tool "SMBMap" "${1}" "${nb_smb_dir}smbmap_anon.out" &
@@ -610,12 +649,21 @@ ports_iterator() {
         nmap -Pn -p512,513,514 -n -v -sVC "${1}" >> "${r_services_dir}r_services_enum.nmap" 2>&1 && \
           finished_tool "Nmap scripts for R-Services" "${1}" "${r_services_dir}r_services_enum.nmap" &
 
+        running_tool "rwho"
+        rwho -a "${1}" >> "${r_services_dir}rwho.out" && \
+          finished_tool "rwho" "${1}" "${r_services_dir}rwho.out" &
+
         running_tool "rusers"
         rusers -al "${1}" >> "${r_services_dir}rusers.out" && \
           finished_tool "rusers" "${1}" "${r_services_dir}rusers.out" &
-        printf "Enumerate NFS, etc on the target server for /home/user/.rhosts and /etc/hosts.equiv files to use with rlogin, rsh and rexec.\nIf found, use the following command: rlogin %s -l found_user" "${1}" >> "${r_services_dir}r_services_next_steps_readme.tip"
+        printf "[+] Tip: enumerate NFS, etc on the target server for /home/user/.rhosts and /etc/hosts.equiv files to use with rlogin, rsh and rexec.\nIf found, use the following command: rlogin %s -l found_user" "${1}" >> "${r_services_dir}r_services_next_steps_readme.tip"
       fi
-      # TODO: implement some light bruteforcing for quick wins
+
+      if [ "$port" -eq 512 ]; then  
+        hydra_bruteforcing "rexec"
+      elif [ "$port" -eq 513 ]; then
+        hydra_bruteforcing "rlogin"
+      fi
       ;;
     623)
       if [ ! -d "${dir}ipmi/" ]; then
@@ -657,6 +705,12 @@ ports_iterator() {
           --script "ms-sql-info,ms-sql-empty-password,ms-sql-xp-cmdshell,ms-sql-config,ms-sql-ntlm-info,ms-sql-tables,ms-sql-hasdbaccess,ms-sql-dac,ms-sql-dump-hashes" \
           --script-args "mssql.instance-port=1433,mssql.username=sa,mssql.password=,mssql.instance-name=MSSQLSERVER" >> "${mssql_dir}"mssql_enum.nmap 2>&1 && \
             finished_tool "Nmap scripts for MSSQL" "${1}" "${mssql_dir}mssql_enum.nmap" &
+        
+        if [ "$bruteforce" -eq 1 ]; then
+          running_tool "CrackMapExec bruteforcing for MSSQL"
+          crackmapexec smb "${1}" -u "$users_list" -p "$darkweb_top1000" >> "${mssql_dir}"cme_brute.out 2>&1 && \
+            finished_tool "CrackMapExec bruteforcing for MSSQL" "${1}" "-R ${mssql_dir}cme_brute.out" & 
+        fi
       fi
       ;;
     1521)
@@ -705,6 +759,8 @@ ports_iterator() {
         nmap -sVC -n -v -Pn -p3306 "${1}" --script "mysql*" >> "${mysql_dir}"mysql_enum.nmap 2>&1 && \
           finished_tool "Nmap scripts for MySQL" "${1}" "${mysql_dir}mysql_enum.nmap" &
         # TODO: implement some light bruteforcing for quick wins
+
+        hydra_bruteforcing "$1" "${mysql_dir}" "mysql"
       fi
       ;;
     3389)
@@ -715,6 +771,8 @@ ports_iterator() {
         running_tool "Nmap scripts for RDP"
         nmap -sVC -n -v -Pn -p"$port" "${1}" --script "rdp*" >> "${rdp_dir}"rdp_enum.nmap 2>&1 && \
           finished_tool "Nmap scripts for RDP" "${1}" "${rdp_dir}rdp_enum.nmap" &
+
+        hydra_bruteforcing "$1" "${rdp_dir}" "rdp"
       fi
       ;;
     5985|5986)

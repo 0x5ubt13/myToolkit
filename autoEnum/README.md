@@ -27,14 +27,15 @@ _  __ `/  / / /  __/  __ \_  __/  __  __ \  / / /_  __ `__ \
                     by 0x5ubt13                             
    
 Usage: autoenum [OPTIONS] -t <Single target's IP / Targets file>
-	-a: Again     - Repeat the scan and compare with initial ports discovered.
-	-d: DNS       - Specify custom DNS servers. Default option: -n.
-	-h: Help      - Display this help and exit.
-	-p: top Ports - Run port sweep with nmap and the flag --top-ports=<your input>
-	-q: Quiet     - Don't print the cool banner and decrease overall verbosity.
-	-r: Range     - Specify a CIDR range to use tools for whole subnets.
-	-s: Slower    - Don't use Rustscan for the initial port sweep.
-	-t: Target    - Specify target single IP / List of IPs file.
+	-a: Again      - Repeat the scan and compare with initial ports discovered.
+	-b: Bruteforce - Activate all fuzzing and bruteforcing in the script.
+	-d: DNS        - Specify custom DNS servers. Default option: -n.
+	-h: Help       - Display this help and exit.
+	-p: top Ports  - Run port sweep with nmap and the flag --top-ports=<your input>
+	-q: Quiet      - Don't print the cool banner and decrease overall verbosity.
+	-r: Range      - Specify a CIDR range to use tools for whole subnets.
+	-s: Slower     - Don't use Rustscan for the initial port sweep.
+	-t: Target     - Specify target single IP / List of IPs file.
 
 Examples:
 	autoenum -t 192.168.142.93
@@ -44,7 +45,7 @@ Examples:
 	autoenum -t targets_file.txt -r 10.10.8.0/24 
 ~~~
 
-## 26 wrapped tools currently present
+## 29 wrapped tools currently present
 
 - Braa
 - CeWL
@@ -56,6 +57,7 @@ Examples:
 - Ident-user-enum
 - Metasploit
 - Nbtscan-unixwiz
+- Netdiscover
 - Nikto
 - Nmap
 - Nmblookup
@@ -64,7 +66,9 @@ Examples:
 - Onesixtyone
 - Responder-RunFinger
 - RPCDump
+- Rusers
 - Rustscan
+- Rwho
 - SMBMap
 - SNMPWalk
 - SSH-Audit
