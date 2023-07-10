@@ -48,6 +48,7 @@ if [ -n "$compatible_distro" ]; then
   fi
 
   # Using apt-get for the following tools
+  install nfs-common
   install updatedb
   install locate
   install odat
