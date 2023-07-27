@@ -1,5 +1,13 @@
 #!/bin/bash
 
+#######
+#######
+#######  Project moved to https://github.com/0x5ubt13/autoenum
+#######  This is a residual snapshot of the script on 10/07/23
+printf "#####\nThis is a residual snapshot of the script on 10/07/23\nYou can find the up-to-date version of the project here: https://github.com/0x5ubt13/autoenum\n#####"; exit
+#######
+#######
+
 # ---------- Colour constants ----------
 RESTORE="\033[0m"
 RED="\033[031m"
